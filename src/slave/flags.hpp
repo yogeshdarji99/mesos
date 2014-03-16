@@ -57,7 +57,7 @@ public:
     add(&Flags::isolation,
         "isolation",
         "Isolation mechanisms to use, e.g., 'posix/cpu,posix/mem'\n"
-        "or 'cgroups/cpu,cgroups/mem'.",
+        "or 'cgroups/cpu,cgroups/mem' or 'external'.",
         "posix/cpu,posix/mem");
 
     add(&Flags::default_role,
@@ -70,8 +70,8 @@ public:
         "*");
 
     add(&Flags::attributes,
-      "attributes",
-      "Attributes of machine");
+        "attributes",
+        "Attributes of machine");
 
     add(&Flags::work_dir,
         "work_dir",
@@ -196,6 +196,15 @@ public:
         "via the CFS bandwidth limiting subfeature.\n",
         false);
 #endif
+
+    add(&Flags::containerizer_path,
+        "containerizer_path",
+        "The path to the external containerizer executable used when\n"
+        "external isolation is activated (--isolation=external).\n");
+
+    add(&Flags::default_container_image,
+        "default_container_image",
+        "The default container image to use if not specified by a task.\n");
   }
 
   bool version;
@@ -224,6 +233,8 @@ public:
   Option<std::string> cgroups_subsystems;
   bool cgroups_enable_cfs;
 #endif
+  Option<std::string> containerizer_path;
+  Option<std::string> default_container_image;
 };
 
 } // namespace mesos {
