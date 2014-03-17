@@ -319,7 +319,6 @@ Future<ExecutorInfo> ExternalContainerizerProcess::launch(
 
   // Read from the result-pipe and invoke callback when reaching EOF.
   return read(resultPipe)
-    .onAny(lambda::bind(&os::close, resultPipe))
     .then(defer(
         PID<ExternalContainerizerProcess>(this),
         &ExternalContainerizerProcess::_launch,
@@ -1064,7 +1063,6 @@ Try<pid_t> ExternalContainerizerProcess::invoke(
       resultPipe);
 }
 
-
 struct ChildFunction {
   ChildFunction(const string& path) : path(path) {};
 
@@ -1078,7 +1076,6 @@ struct ChildFunction {
 
   const string& path;
 };
-
 
 Try<pid_t> ExternalContainerizerProcess::invoke(
     const string& command,
