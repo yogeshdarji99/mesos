@@ -1070,7 +1070,10 @@ struct ChildFunction {
 
   void operator ()()
   {
-    ::chdir(path.c_str());
+    // Silence compiler warnings.
+    if (::chdir(path.c_str()) < 0) {
+      return;
+    }
   }
 
   const string& path;
