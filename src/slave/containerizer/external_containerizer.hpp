@@ -24,6 +24,7 @@
 #include <string>
 
 #include <process/owned.hpp>
+#include <process/subprocess.hpp>
 
 #include <stout/hashmap.hpp>
 #include <stout/try.hpp>
@@ -242,24 +243,21 @@ private:
 
   // Call the external, pluggable containerizer and open a pipe for
   // receiving results from that command.
-  Try<pid_t> invoke(
+  Try<process::Subprocess> invoke(
+      const std::string& command,
+      const ContainerID& containerId);
+
+  Try<process::Subprocess> invoke(
       const std::string& command,
       const ContainerID& containerId,
-      int& resultPipe);
+      const std::string& output);
 
-  Try<pid_t> invoke(
-      const std::string& command,
-      const ContainerID& containerId,
-      const std::string& output,
-      int& resultPipe);
-
-  Try<pid_t> invoke(
+  Try<process::Subprocess> invoke(
       const std::string& command,
       const std::vector<std::string>& parameters,
       const std::map<std::string, std::string>& environment,
       const ContainerID& containerId,
-      const std::string& output,
-      int& resultPipe);
+      const std::string& output);
 };
 
 // Get an ExecutorInfo that is specific to a container.

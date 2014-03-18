@@ -24,6 +24,8 @@ import mesos_pb2
 import multiprocessing
 import time
 
+import pprint
+
 def launch(container, arguments):
   try:
     data = sys.stdin.read()
@@ -48,8 +50,10 @@ def launch(container, arguments):
     status = mesos_pb2.ExternalStatus();
     status.message = "python containerizer test reports foo-bar on launch";
 
-    os.write(1, status.SerializeToString());
-    os.close(1);
+    os.write(1, status.SerializeToString())
+    os.close(1)
+
+    print >> sys.stderr, "ran command: " + pprint.pformat(command)
 
     proc = subprocess.Popen(command, env=os.environ.copy())
 

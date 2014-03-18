@@ -31,7 +31,6 @@
 #include <process/id.hpp>
 #include <process/io.hpp>
 #include <process/reap.hpp>
-#include <process/subprocess.hpp>
 
 #include <stout/check.hpp>
 #include <stout/foreach.hpp>
@@ -291,14 +290,12 @@ Future<ExecutorInfo> ExternalContainerizerProcess::launch(
   parameters.push_back("--mesos-executor");
   parameters.push_back(path::join(flags.launcher_dir, "mesos-executor"));
 
-  int resultPipe;
-  Try<pid_t> invoked = invoke(
+  Try<Subprocess> invoked = invoke(
       "launch",
       parameters,
       environment,
       containerId,
-      output.str(),
-      resultPipe);
+      output.str());
 
   if (invoked.isError()) {
     return Failure("Launch of container '" + containerId.value()
@@ -306,11 +303,11 @@ Future<ExecutorInfo> ExternalContainerizerProcess::launch(
   }
 
   // Record the process.
-  running.put(containerId, Owned<Running>(new Running(invoked.get())));
+  running.put(containerId, Owned<Running>(new Running(invoked.get().pid())));
 
   // Observe the process status and install a callback for status
   // changes.
-  process::reap(invoked.get())
+  invoked.get().status()
     .onAny(defer(
         PID<ExternalContainerizerProcess>(this),
         &ExternalContainerizerProcess::reaped,
@@ -318,17 +315,54 @@ Future<ExecutorInfo> ExternalContainerizerProcess::launch(
         lambda::_1));
 
   // Read from the result-pipe and invoke callback when reaching EOF.
-  return read(resultPipe)
+  VLOG(2) << "Now awaiting data from pipe...";
+
+/*
+  Try<Nothing> nonblock = os::nonblock(invoked.get().out());
+  if (nonblock.isError()) {
+    os::close(invoked.get().out());
+    return Failure("Failed to accept nonblock (error: " + nonblock.error()
+      + ")");
+  }*/
+
+  // Dirty little workaround using a sync-read-fake-promise.
+  stringstream result;
+  for (;;) {
+    char buffer[256];
+    int len = ::read(invoked.get().out(), buffer, 256);
+    if (len == -1 && errno == EINTR)
+        continue;
+    if (len == 0)
+        break;
+    result.write(buffer, len);
+  }
+  Owned<Promise<string> > syncread(new Promise<string>);
+  syncread->set(result.str());
+  return syncread->future()
     .then(defer(
         PID<ExternalContainerizerProcess>(this),
         &ExternalContainerizerProcess::_launch,
         containerId,
-        invoked.get(),
+        invoked.get().pid(),
+        frameworkId,
+        executor,
+        slaveId,
+        checkpoint,
+        syncread->future()));
+
+/*
+  return read(invoked.get().out())
+    .then(defer(
+        PID<ExternalContainerizerProcess>(this),
+        &ExternalContainerizerProcess::_launch,
+        containerId,
+        invoked.get().pid(),
         frameworkId,
         executor,
         slaveId,
         checkpoint,
         lambda::_1));
+        */
 }
 
 
@@ -420,8 +454,7 @@ Future<Containerizer::Termination> ExternalContainerizerProcess::wait(
     return Failure("Container '" + containerId.value() + "' not running");
   }
 
-  int resultPipe;
-  Try<pid_t> invoked = invoke("wait", containerId, resultPipe);
+  Try<Subprocess> invoked = invoke("wait", containerId);
 
   if (invoked.isError()) {
     terminate(containerId);
@@ -431,7 +464,7 @@ Future<Containerizer::Termination> ExternalContainerizerProcess::wait(
 
   // Await both, input from the pipe as well as an exit of the
   // process.
-  await(read(resultPipe), reap(invoked.get()))
+  await(read(invoked.get().out()), invoked.get().status())
     .onAny(defer(
         PID<ExternalContainerizerProcess>(this),
         &ExternalContainerizerProcess::_wait,
@@ -520,8 +553,7 @@ Future<Nothing> ExternalContainerizerProcess::update(
   stringstream output;
   resourceArray.SerializeToOstream(&output);
 
-  int resultPipe;
-  Try<pid_t> invoked = invoke("update", containerId, output.str(), resultPipe);
+  Try<Subprocess> invoked = invoke("update", containerId, output.str());
 
   if (invoked.isError()) {
     terminate(containerId);
@@ -531,7 +563,7 @@ Future<Nothing> ExternalContainerizerProcess::update(
 
   // Await both, input from the pipe as well as an exit of the
   // process.
-  return await(read(resultPipe), reap(invoked.get()))
+  return await(read(invoked.get().out()), invoked.get().status())
     .then(defer(
         PID<ExternalContainerizerProcess>(this),
         &ExternalContainerizerProcess::_update,
@@ -591,8 +623,7 @@ Future<ResourceStatistics> ExternalContainerizerProcess::usage(
     return Failure("Container '" + containerId.value() + "'' not running");
   }
 
-  int resultPipe;
-  Try<pid_t> invoked = invoke("usage", containerId, resultPipe);
+  Try<Subprocess> invoked = invoke("usage", containerId);
 
   if (invoked.isError()) {
     terminate(containerId);
@@ -602,7 +633,7 @@ Future<ResourceStatistics> ExternalContainerizerProcess::usage(
 
   // Await both, input from the pipe as well as an exit of the
   // process.
-  return await(read(resultPipe), reap(invoked.get()))
+  return await(read(invoked.get().out()), invoked.get().status())
     .then(defer(
         PID<ExternalContainerizerProcess>(this),
         &ExternalContainerizerProcess::_usage,
@@ -745,8 +776,7 @@ void ExternalContainerizerProcess::destroy(const ContainerID& containerId)
     return;
   }
 
-  int resultPipe;
-  Try<pid_t> invoked = invoke("destroy", containerId, resultPipe);
+  Try<Subprocess> invoked = invoke("destroy", containerId);
 
   if (invoked.isError()) {
     LOG(ERROR) << "Destroy of container '" << containerId
@@ -757,7 +787,7 @@ void ExternalContainerizerProcess::destroy(const ContainerID& containerId)
 
   // Await both, input from the pipe as well as an exit of the
   // process.
-  await(read(resultPipe), reap(invoked.get()))
+  await(read(invoked.get().out()), invoked.get().status())
     .onAny(defer(
         PID<ExternalContainerizerProcess>(this),
         &ExternalContainerizerProcess::_destroy,
@@ -966,12 +996,7 @@ Try<bool> ExternalContainerizerProcess::commandSupported(
     return Error(stat.error());
   }
 
-  Try<bool> support = commandSupported(resultString, stat.get());
-  if (support.isError()) {
-    return Error(support.error());
-  }
-
-  return support;
+  return commandSupported(resultString, stat.get());
 }
 
 
@@ -1032,25 +1057,22 @@ Try<int> ExternalContainerizerProcess::status(const ResultFutures& futures)
 }
 
 
-Try<pid_t> ExternalContainerizerProcess::invoke(
+Try<Subprocess> ExternalContainerizerProcess::invoke(
     const string& command,
-    const ContainerID& containerId,
-    int& resultPipe)
+    const ContainerID& containerId)
 {
   string output;
   return invoke(
       command,
       containerId,
-      output,
-      resultPipe);
+      output);
 }
 
 
-Try<pid_t> ExternalContainerizerProcess::invoke(
+Try<Subprocess> ExternalContainerizerProcess::invoke(
     const string& command,
     const ContainerID& containerId,
-    const string& output,
-    int& resultPipe)
+    const string& output)
 {
   vector<string> parameters;
   map<string, string> environment;
@@ -1059,8 +1081,7 @@ Try<pid_t> ExternalContainerizerProcess::invoke(
       parameters,
       environment,
       containerId,
-      output,
-      resultPipe);
+      output);
 }
 
 struct ChildFunction {
@@ -1077,13 +1098,12 @@ struct ChildFunction {
   const string& path;
 };
 
-Try<pid_t> ExternalContainerizerProcess::invoke(
+Try<Subprocess> ExternalContainerizerProcess::invoke(
     const string& command,
     const vector<string>& parameters,
     const map<string, string>& environment,
     const ContainerID& containerId,
-    const string& output,
-    int& resultPipe)
+    const string& output)
 {
   CHECK(flags.containerizer_path.isSome())
     << "containerizer_path not set";
@@ -1122,8 +1142,9 @@ Try<pid_t> ExternalContainerizerProcess::invoke(
   // context.
   Try<Subprocess> external = subprocess(
       strings::join(" ", argv),
-      environment,
-      ChildFunction(sandboxes[containerId]->directory));
+      environment);
+
+      //      ChildFunction(sandboxes[containerId]->directory));
 
   if (external.isError()) {
     return Error(string("Failed to execute external containerizer: ")
@@ -1134,7 +1155,7 @@ Try<pid_t> ExternalContainerizerProcess::invoke(
   // executor work directory, chown'ing it if a user is specified.
   Try<int> err = os::open(
       path::join(sandboxes[containerId]->directory, "stderr"),
-      O_WRONLY | O_CREAT | O_TRUNC | O_NONBLOCK,
+      O_WRONLY | O_CREAT | O_APPEND | O_NONBLOCK,
       S_IRUSR | S_IWUSR | S_IRGRP | S_IRWXO);
 
   if (err.isError()) {
@@ -1163,7 +1184,7 @@ Try<pid_t> ExternalContainerizerProcess::invoke(
 
   // Return the external containerizer's output pipe for receiving
   // protobuffed results.
-  resultPipe = external.get().out();
+  //resultPipe = external.get().out();
 
   // Transmit protobuf data via stdout towards the external
   // containerizer.
@@ -1175,12 +1196,16 @@ Try<pid_t> ExternalContainerizerProcess::invoke(
     if (write(external.get().in(), output.c_str(), len) < len) {
       return Error("Failed to write protobuf to pipe");
     }
+
+    VLOG(2) << "Data written, closing pipe";
   }
 
   // We are done sending data to the external process, close the pipe.
   os::close(external.get().in());
 
-  return external.get().pid();
+  VLOG(2) << "Returning PID:" << external.get().pid();
+
+  return external;
 }
 
 
