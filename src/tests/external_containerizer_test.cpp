@@ -228,7 +228,7 @@ TEST_F(ExternalContainerizerTest, Launch)
 
     os::sleep(Milliseconds(100));
     waited += Milliseconds(100);
-  } while (waited < Seconds(10));
+  } while (waited < Seconds(100));
 
   EXPECT_GE(statistics.cpus_user_time_secs(), 0.120);
   EXPECT_GE(statistics.cpus_system_time_secs(), 0.05);
@@ -250,5 +250,3 @@ TEST_F(ExternalContainerizerTest, Launch)
 
   this->Shutdown();
 }
-
-// TODO(nnielsen): Add tests addressing executor/container matrix.
