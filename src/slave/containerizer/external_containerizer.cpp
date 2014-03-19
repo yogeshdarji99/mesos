@@ -332,13 +332,15 @@ Future<ExecutorInfo> ExternalContainerizerProcess::launch(
     int len = ::read(invoked.get().out(), buffer, 256);
     if (len == -1 && errno == EINTR)
         continue;
-    if (len == 0)
+    if (len <= 0)
         break;
     result.write(buffer, len);
   }
+
   Owned<Promise<string> > syncread(new Promise<string>);
   syncread->set(result.str());
   return syncread->future()
+    .onAny(lambda::bind(os::close, invoked.get().in()))
     .then(defer(
         PID<ExternalContainerizerProcess>(this),
         &ExternalContainerizerProcess::_launch,
@@ -451,12 +453,16 @@ Future<Containerizer::Termination> ExternalContainerizerProcess::wait(
   VLOG(1) << "Wait triggered on container '" << containerId << "'";
 
   if (!running.contains(containerId)) {
+    LOG(ERROR) << "not running";
     return Failure("Container '" + containerId.value() + "' not running");
   }
 
+  LOG(INFO) << "invoking";
   Try<Subprocess> invoked = invoke("wait", containerId);
 
+  LOG(INFO) << "invoked";
   if (invoked.isError()) {
+    LOG(ERROR) << "not running";
     terminate(containerId);
     return Failure("Wait on container '" + containerId.value()
       + "' failed (error: " + invoked.error() + ")");
@@ -469,7 +475,8 @@ Future<Containerizer::Termination> ExternalContainerizerProcess::wait(
         PID<ExternalContainerizerProcess>(this),
         &ExternalContainerizerProcess::_wait,
         containerId,
-        lambda::_1));
+        lambda::_1))
+    .onAny(lambda::bind(os::close, invoked.get().out()));
 
   return running[containerId]->termination.future();
 }
@@ -564,6 +571,7 @@ Future<Nothing> ExternalContainerizerProcess::update(
   // Await both, input from the pipe as well as an exit of the
   // process.
   return await(read(invoked.get().out()), invoked.get().status())
+    .onAny(lambda::bind(os::close, invoked.get().out()))
     .then(defer(
         PID<ExternalContainerizerProcess>(this),
         &ExternalContainerizerProcess::_update,
@@ -634,6 +642,7 @@ Future<ResourceStatistics> ExternalContainerizerProcess::usage(
   // Await both, input from the pipe as well as an exit of the
   // process.
   return await(read(invoked.get().out()), invoked.get().status())
+    .onAny(lambda::bind(os::close, invoked.get().out()))
     .then(defer(
         PID<ExternalContainerizerProcess>(this),
         &ExternalContainerizerProcess::_usage,
@@ -788,6 +797,7 @@ void ExternalContainerizerProcess::destroy(const ContainerID& containerId)
   // Await both, input from the pipe as well as an exit of the
   // process.
   await(read(invoked.get().out()), invoked.get().status())
+    .onAny(lambda::bind(os::close, invoked.get().out()))
     .onAny(defer(
         PID<ExternalContainerizerProcess>(this),
         &ExternalContainerizerProcess::_destroy,
@@ -967,7 +977,6 @@ Future<string> ExternalContainerizerProcess::read(int pipe)
   Try<Nothing> nonblock = os::nonblock(pipe);
 
   if (nonblock.isError()) {
-    os::close(pipe);
     return Failure("Failed to accept nonblock (error: " + nonblock.error()
       + ")");
   }

@@ -145,8 +145,9 @@ Try<Subprocess> subprocess(
 
     // Run function in child context.
     if (inChild) {
-      inChild();
+       inChild();
     }
+
 
     execle("/bin/sh", "sh", "-c", command.c_str(), (char*) NULL, envp());
 
