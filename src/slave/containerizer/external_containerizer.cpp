@@ -1221,14 +1221,10 @@ Try<Subprocess> ExternalContainerizerProcess::invoke(
   // We are done sending data to the external process, close the pipe.
   os::close(external.get().in());
 
+  VLOG(2) << "===========================";
   VLOG(2) << "Returning PID:" << external.get().pid();
-  VLOG(2) << "Childs output pipe:" << external.get().out();
-
-  VLOG(2) << "delaying ....";
-
-  sleep(20);
-
-  VLOG(2) << "....continue";
+  VLOG(2) << "Child's output pipe:" << external.get().out();
+  VLOG(2) << "===========================";
 
   return external;
 }

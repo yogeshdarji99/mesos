@@ -50,8 +50,6 @@ def launch(container, arguments):
     status = mesos_pb2.ExternalStatus();
     status.message = "python containerizer test reports foo-bar on launch";
 
-    time.sleep(5)
-
     os.write(1, status.SerializeToString())
     os.close(1)
 
