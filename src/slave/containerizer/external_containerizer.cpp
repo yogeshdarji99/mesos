@@ -316,6 +316,7 @@ Future<ExecutorInfo> ExternalContainerizerProcess::launch(
 
   // Read from the result-pipe and invoke callback when reaching EOF.
   VLOG(2) << "Now awaiting data from pipe...";
+
 /*
   Try<Nothing> nonblock = os::nonblock(invoked.get().out());
   if (nonblock.isError()) {
@@ -324,6 +325,7 @@ Future<ExecutorInfo> ExternalContainerizerProcess::launch(
       + ")");
   }*/
 
+/*
   // Dirty little workaround using a sync-read-fake-promise.
   stringstream result;
 
@@ -332,14 +334,15 @@ Future<ExecutorInfo> ExternalContainerizerProcess::launch(
 
     int len = ::read(invoked.get().out(), buffer, 256);
 
-    if (len == -1 &&
-      (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK)) {
+    if ((len == -1) && (errno == EAGAIN)) {
         continue;
     }
     if (len > 0) {
+      VLOG(2) << "got some data: " << len << "bytes";
       result.write(buffer, len);
     }
     else {
+      VLOG(2) << "len: " << len << "bytes";
       break;
     }
   }
@@ -360,7 +363,8 @@ Future<ExecutorInfo> ExternalContainerizerProcess::launch(
         slaveId,
         checkpoint,
         syncread->future()));
-/*
+        */
+
   return read(invoked.get().out())
     .onAny(lambda::bind(os::close, invoked.get().out()))
     .then(defer(
@@ -373,7 +377,6 @@ Future<ExecutorInfo> ExternalContainerizerProcess::launch(
         slaveId,
         checkpoint,
         lambda::_1));
-        */
 }
 
 
@@ -480,12 +483,12 @@ Future<Containerizer::Termination> ExternalContainerizerProcess::wait(
   // Await both, input from the pipe as well as an exit of the
   // process.
   await(read(invoked.get().out()), invoked.get().status())
+    .onAny(lambda::bind(os::close, invoked.get().out()))
     .onAny(defer(
         PID<ExternalContainerizerProcess>(this),
         &ExternalContainerizerProcess::_wait,
         containerId,
-        lambda::_1))
-    .onAny(lambda::bind(os::close, invoked.get().out()));
+        lambda::_1));
 
   return running[containerId]->termination.future();
 }

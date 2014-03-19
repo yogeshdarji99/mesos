@@ -50,14 +50,26 @@ def launch(container, arguments):
     status = mesos_pb2.ExternalStatus();
     status.message = "python containerizer test reports foo-bar on launch";
 
-    os.write(1, status.SerializeToString())
+    print >> sys.stderr, "Sending status protobuf."
+
+#    time.sleep(5)
+
+#    os.write(1, status.SerializeToString())
+
+    os.write(1, "foo and bar\n");
     os.close(1)
 
-    print >> sys.stderr, "ran command: " + pprint.pformat(command)
+    print >> sys.stderr, "Sending status protobuf."
+
+    print >> sys.stderr, "run command: " + pprint.pformat(command)
 
     proc = subprocess.Popen(command, env=os.environ.copy())
 
-    #proc.wait()
+    print >> sys.stderr, "waiting for command..."
+
+   # proc.wait()
+
+    time.sleep(60)
 
   except google.protobuf.message.DecodeError:
     print >> sys.stderr, "Could not deserialise TaskInfo protobuf"
