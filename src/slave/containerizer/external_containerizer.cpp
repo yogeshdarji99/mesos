@@ -316,58 +316,9 @@ Future<ExecutorInfo> ExternalContainerizerProcess::launch(
         containerId,
         lambda::_1));
 
-  // Read from the result-pipe and invoke callback when reaching EOF.
   VLOG(2) << "Now awaiting data from pipe...";
 
-/*
-  Try<Nothing> nonblock = os::nonblock(invoked.get().out());
-  if (nonblock.isError()) {
-    os::close(invoked.get().out());
-    return Failure("Failed to accept nonblock (error: " + nonblock.error()
-      + ")");
-  }
-
-  // Dirty little workaround using a sync-read-fake-promise.
-  stringstream result;
-
-  for (;;) {
-    char buffer[256];
-
-    int len = ::read(invoked.get().out(), buffer, 256);
-
-    if ((len == -1) && (errno == EAGAIN)) {
-        continue;
-    }
-    if (len > 0) {
-      VLOG(2) << "got some data: " << len << "bytes";
-      result.write(buffer, len);
-    }
-    else {
-      VLOG(2) << "len: " << len << "bytes";
-      break;
-    }
-  }
-
-  VLOG(2) << "Received " << result.str().length() << " bytes";
-  */
-/*
-
-  Owned<Promise<string> > syncread(new Promise<string>);
-  syncread->set(result.str());
-  return syncread->future()
-    .onAny(lambda::bind(os::close, invoked.get().out()))
-    .then(defer(
-        PID<ExternalContainerizerProcess>(this),
-        &ExternalContainerizerProcess::_launch,
-        containerId,
-        invoked.get().pid(),
-        frameworkId,
-        executor,
-        slaveId,
-        checkpoint,
-        syncread->future()));
-        */
-
+  // Read from the result-pipe and invoke callbacks when reaching EOF.
   return read(invoked.get().out)
     .onAny(lambda::bind(os::close, invoked.get().out))
     .then(defer(
@@ -1173,7 +1124,6 @@ Try<ExternalContainerizerProcess::ChildProcess>
     os::close(stderrPipe[1]);
     return ErrnoError("Failed to fork");
   }
-
 
   if (pid == 0) {
     // Child.
