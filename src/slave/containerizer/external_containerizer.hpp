@@ -24,7 +24,6 @@
 #include <string>
 
 #include <process/owned.hpp>
-#include <process/subprocess.hpp>
 
 #include <stout/hashmap.hpp>
 #include <stout/try.hpp>
@@ -91,6 +90,18 @@ public:
 
 private:
   ExternalContainerizerProcess* process;
+};
+
+
+struct ChildProcess
+{
+  pid_t pid;
+
+  int in;
+  int out;
+  int err;
+
+  process::Future<Option<int> > status;
 };
 
 
@@ -241,18 +252,24 @@ private:
   // in the container.
   void cleanup(const ContainerID& containerId);
 
+  Try<ChildProcess> childProcessStart(
+      const std::string& command,
+      const std::map<std::string, std::string>& env =
+        std::map<std::string, std::string>(),
+      const lambda::function<void()>& inChild = NULL);
+
   // Call the external, pluggable containerizer and open a pipe for
   // receiving results from that command.
-  Try<process::Subprocess> invoke(
+  Try<ChildProcess> invoke(
       const std::string& command,
       const ContainerID& containerId);
 
-  Try<process::Subprocess> invoke(
+  Try<ChildProcess> invoke(
       const std::string& command,
       const ContainerID& containerId,
       const std::string& output);
 
-  Try<process::Subprocess> invoke(
+  Try<ChildProcess> invoke(
       const std::string& command,
       const std::vector<std::string>& parameters,
       const std::map<std::string, std::string>& environment,

@@ -57,6 +57,8 @@ using tuples::tuple;
 
 using namespace process;
 
+extern char** environ;
+
 namespace mesos {
 namespace internal {
 namespace slave {
@@ -290,7 +292,7 @@ Future<ExecutorInfo> ExternalContainerizerProcess::launch(
   parameters.push_back("--mesos-executor");
   parameters.push_back(path::join(flags.launcher_dir, "mesos-executor"));
 
-  Try<Subprocess> invoked = invoke(
+  Try<ChildProcess> invoked = invoke(
       "launch",
       parameters,
       environment,
@@ -303,11 +305,11 @@ Future<ExecutorInfo> ExternalContainerizerProcess::launch(
   }
 
   // Record the process.
-  running.put(containerId, Owned<Running>(new Running(invoked.get().pid())));
+  running.put(containerId, Owned<Running>(new Running(invoked.get().pid)));
 
   // Observe the process status and install a callback for status
   // changes.
-  invoked.get().status()
+  invoked.get().status
     .onAny(defer(
         PID<ExternalContainerizerProcess>(this),
         &ExternalContainerizerProcess::reaped,
@@ -323,9 +325,8 @@ Future<ExecutorInfo> ExternalContainerizerProcess::launch(
     os::close(invoked.get().out());
     return Failure("Failed to accept nonblock (error: " + nonblock.error()
       + ")");
-  }*/
+  }
 
-/*
   // Dirty little workaround using a sync-read-fake-promise.
   stringstream result;
 
@@ -348,6 +349,8 @@ Future<ExecutorInfo> ExternalContainerizerProcess::launch(
   }
 
   VLOG(2) << "Received " << result.str().length() << " bytes";
+  */
+/*
 
   Owned<Promise<string> > syncread(new Promise<string>);
   syncread->set(result.str());
@@ -365,13 +368,13 @@ Future<ExecutorInfo> ExternalContainerizerProcess::launch(
         syncread->future()));
         */
 
-  return read(invoked.get().out())
-    .onAny(lambda::bind(os::close, invoked.get().out()))
+  return read(invoked.get().out)
+    .onAny(lambda::bind(os::close, invoked.get().out))
     .then(defer(
         PID<ExternalContainerizerProcess>(this),
         &ExternalContainerizerProcess::_launch,
         containerId,
-        invoked.get().pid(),
+        invoked.get().pid,
         frameworkId,
         executor,
         slaveId,
@@ -470,7 +473,7 @@ Future<Containerizer::Termination> ExternalContainerizerProcess::wait(
   }
 
   LOG(INFO) << "invoking";
-  Try<Subprocess> invoked = invoke("wait", containerId);
+  Try<ChildProcess> invoked = invoke("wait", containerId);
 
   LOG(INFO) << "invoked";
   if (invoked.isError()) {
@@ -482,8 +485,8 @@ Future<Containerizer::Termination> ExternalContainerizerProcess::wait(
 
   // Await both, input from the pipe as well as an exit of the
   // process.
-  await(read(invoked.get().out()), invoked.get().status())
-    .onAny(lambda::bind(os::close, invoked.get().out()))
+  await(read(invoked.get().out), invoked.get().status)
+    .onAny(lambda::bind(os::close, invoked.get().out))
     .onAny(defer(
         PID<ExternalContainerizerProcess>(this),
         &ExternalContainerizerProcess::_wait,
@@ -572,7 +575,7 @@ Future<Nothing> ExternalContainerizerProcess::update(
   stringstream output;
   resourceArray.SerializeToOstream(&output);
 
-  Try<Subprocess> invoked = invoke("update", containerId, output.str());
+  Try<ChildProcess> invoked = invoke("update", containerId, output.str());
 
   if (invoked.isError()) {
     terminate(containerId);
@@ -582,8 +585,8 @@ Future<Nothing> ExternalContainerizerProcess::update(
 
   // Await both, input from the pipe as well as an exit of the
   // process.
-  return await(read(invoked.get().out()), invoked.get().status())
-    .onAny(lambda::bind(os::close, invoked.get().out()))
+  return await(read(invoked.get().out), invoked.get().status)
+    .onAny(lambda::bind(os::close, invoked.get().out))
     .then(defer(
         PID<ExternalContainerizerProcess>(this),
         &ExternalContainerizerProcess::_update,
@@ -643,7 +646,7 @@ Future<ResourceStatistics> ExternalContainerizerProcess::usage(
     return Failure("Container '" + containerId.value() + "'' not running");
   }
 
-  Try<Subprocess> invoked = invoke("usage", containerId);
+  Try<ChildProcess> invoked = invoke("usage", containerId);
 
   if (invoked.isError()) {
     terminate(containerId);
@@ -653,8 +656,8 @@ Future<ResourceStatistics> ExternalContainerizerProcess::usage(
 
   // Await both, input from the pipe as well as an exit of the
   // process.
-  return await(read(invoked.get().out()), invoked.get().status())
-    .onAny(lambda::bind(os::close, invoked.get().out()))
+  return await(read(invoked.get().out), invoked.get().status)
+    .onAny(lambda::bind(os::close, invoked.get().out))
     .then(defer(
         PID<ExternalContainerizerProcess>(this),
         &ExternalContainerizerProcess::_usage,
@@ -797,7 +800,7 @@ void ExternalContainerizerProcess::destroy(const ContainerID& containerId)
     return;
   }
 
-  Try<Subprocess> invoked = invoke("destroy", containerId);
+  Try<ChildProcess> invoked = invoke("destroy", containerId);
 
   if (invoked.isError()) {
     LOG(ERROR) << "Destroy of container '" << containerId
@@ -808,8 +811,8 @@ void ExternalContainerizerProcess::destroy(const ContainerID& containerId)
 
   // Await both, input from the pipe as well as an exit of the
   // process.
-  await(read(invoked.get().out()), invoked.get().status())
-    .onAny(lambda::bind(os::close, invoked.get().out()))
+  await(read(invoked.get().out), invoked.get().status)
+    .onAny(lambda::bind(os::close, invoked.get().out))
     .onAny(defer(
         PID<ExternalContainerizerProcess>(this),
         &ExternalContainerizerProcess::_destroy,
@@ -1078,7 +1081,7 @@ Try<int> ExternalContainerizerProcess::status(const ResultFutures& futures)
 }
 
 
-Try<Subprocess> ExternalContainerizerProcess::invoke(
+Try<ChildProcess> ExternalContainerizerProcess::invoke(
     const string& command,
     const ContainerID& containerId)
 {
@@ -1090,7 +1093,7 @@ Try<Subprocess> ExternalContainerizerProcess::invoke(
 }
 
 
-Try<Subprocess> ExternalContainerizerProcess::invoke(
+Try<ChildProcess> ExternalContainerizerProcess::invoke(
     const string& command,
     const ContainerID& containerId,
     const string& output)
@@ -1105,6 +1108,7 @@ Try<Subprocess> ExternalContainerizerProcess::invoke(
       output);
 }
 
+
 struct ChildFunction {
   ChildFunction(const string& path) : path(path) {};
 
@@ -1115,11 +1119,112 @@ struct ChildFunction {
       return;
     }
   }
-
   const string& path;
 };
 
-Try<Subprocess> ExternalContainerizerProcess::invoke(
+
+Try<ChildProcess> ExternalContainerizerProcess::childProcessStart(
+    const string& command,
+    const map<string, string>& env,
+    const lambda::function<void()>& inChild)
+{
+  // Create pipes for stdin, stdout, stderr.
+  // Index 0 is for reading, and index 1 is for writing.
+  int stdinPipe[2];
+  int stdoutPipe[2];
+  int stderrPipe[2];
+
+  if (pipe(stdinPipe) == -1) {
+    return ErrnoError("Failed to create pipe");
+  } else if (pipe(stdoutPipe) == -1) {
+    os::close(stdinPipe[0]);
+    os::close(stdinPipe[1]);
+    return ErrnoError("Failed to create pipe");
+  } else if (pipe(stderrPipe) == -1) {
+    os::close(stdinPipe[0]);
+    os::close(stdinPipe[1]);
+    os::close(stdoutPipe[0]);
+    os::close(stdoutPipe[1]);
+    return ErrnoError("Failed to create pipe");
+  }
+
+  ChildProcess childProcess;
+
+  std::vector<const char*> list;
+  std::vector<Owned<const string> > environment;
+  foreachpair (const string& key, const string& value, env) {
+    Owned<const string> pair = Owned<const string>(
+        new const string(key + "=" + value));
+    environment.push_back(pair);
+    list.push_back(pair->c_str());
+  }
+  char** parentEnv = environ;
+  while (*parentEnv) {
+    list.push_back(*parentEnv);
+    ++parentEnv;
+  }
+  list.push_back(NULL);
+
+  const char** envp = &list[0];
+
+  pid_t pid;
+  if ((pid = fork()) == -1) {
+    os::close(stdinPipe[0]);
+    os::close(stdinPipe[1]);
+    os::close(stdoutPipe[0]);
+    os::close(stdoutPipe[1]);
+    os::close(stderrPipe[0]);
+    os::close(stderrPipe[1]);
+    return ErrnoError("Failed to fork");
+  }
+
+  childProcess.pid = pid;
+
+  if (childProcess.pid == 0) {
+    // Child.
+    // Close parent's end of the pipes.
+    os::close(stdinPipe[1]);
+    os::close(stdoutPipe[0]);
+    os::close(stderrPipe[0]);
+
+    // Make our pipes look like stdin, stderr, stdout before we exec.
+    while (dup2(stdinPipe[0], STDIN_FILENO)   == -1 && errno == EINTR);
+    while (dup2(stdoutPipe[1], STDOUT_FILENO) == -1 && errno == EINTR);
+    while (dup2(stderrPipe[1], STDERR_FILENO) == -1 && errno == EINTR);
+
+    // Close the copies.
+    os::close(stdinPipe[0]);
+    os::close(stdoutPipe[1]);
+    os::close(stderrPipe[1]);
+
+    // Run function in child context.
+    if (inChild) {
+       inChild();
+    }
+
+    execle("/bin/sh", "sh", "-c", command.c_str(), (char*) NULL, envp);
+
+    ABORT("Failed to execl '/bin sh -c ", command.c_str(), "'\n");
+  }
+
+  // Parent.
+
+  // Close the child's end of the pipes.
+  os::close(stdinPipe[0]);
+  os::close(stdoutPipe[1]);
+  os::close(stderrPipe[1]);
+
+  childProcess.in = stdinPipe[1];
+  childProcess.out = stdoutPipe[0];
+  childProcess.err = stderrPipe[0];
+
+  childProcess.status = process::reap(childProcess.pid);
+
+  return childProcess;
+}
+
+
+Try<ChildProcess> ExternalContainerizerProcess::invoke(
     const string& command,
     const vector<string>& parameters,
     const map<string, string>& environment,
@@ -1161,7 +1266,7 @@ Try<Subprocess> ExternalContainerizerProcess::invoke(
 
   // Fork exec of external process. Run a chdir within the child-
   // context.
-  Try<Subprocess> external = subprocess(
+  Try<ChildProcess> external = childProcessStart(
       strings::join(" ", argv),
       environment);
 
@@ -1194,13 +1299,13 @@ Try<Subprocess> ExternalContainerizerProcess::invoke(
     }
   }
 
-  Try<Nothing> nonblock = os::nonblock(external.get().err());
+  Try<Nothing> nonblock = os::nonblock(external.get().err);
   if (nonblock.isError()) {
     os::close(err.get());
     return Error("Failed to redirect stderr:" + nonblock.error());
   }
 
-  io::splice(external.get().err(), err.get())
+  io::splice(external.get().err, err.get())
     .onAny(lambda::bind(&os::close, err.get()));
 
   // Return the external containerizer's output pipe for receiving
@@ -1214,7 +1319,7 @@ Try<Subprocess> ExternalContainerizerProcess::invoke(
             << "(" << output.length() << " bytes)";
 
     ssize_t len = output.length();
-    if (write(external.get().in(), output.c_str(), len) < len) {
+    if (write(external.get().in, output.c_str(), len) < len) {
       return Error("Failed to write protobuf to pipe");
     }
 
@@ -1222,11 +1327,11 @@ Try<Subprocess> ExternalContainerizerProcess::invoke(
   }
 
   // We are done sending data to the external process, close the pipe.
-  os::close(external.get().in());
+  os::close(external.get().in);
 
   VLOG(2) << "===========================";
-  VLOG(2) << "Returning PID:" << external.get().pid();
-  VLOG(2) << "Child's output pipe:" << external.get().out();
+  VLOG(2) << "Returning PID:" << external.get().pid;
+  VLOG(2) << "Child's output pipe:" << external.get().out;
   VLOG(2) << "===========================";
 
   return external;

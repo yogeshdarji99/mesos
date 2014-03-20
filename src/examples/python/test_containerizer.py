@@ -52,14 +52,11 @@ def launch(container, arguments):
 
     print >> sys.stderr, "Sending status protobuf."
 
-#    time.sleep(5)
-
-#    os.write(1, status.SerializeToString())
-
-    os.write(1, "foo and bar\n");
+    os.write(1, status.SerializeToString())
+    time.sleep(1)
     os.close(1)
 
-    print >> sys.stderr, "Sending status protobuf."
+    print >> sys.stderr, "Sent status protobuf."
 
     print >> sys.stderr, "run command: " + pprint.pformat(command)
 
@@ -67,9 +64,7 @@ def launch(container, arguments):
 
     print >> sys.stderr, "waiting for command..."
 
-   # proc.wait()
-
-    time.sleep(60)
+    proc.wait()
 
   except google.protobuf.message.DecodeError:
     print >> sys.stderr, "Could not deserialise TaskInfo protobuf"
