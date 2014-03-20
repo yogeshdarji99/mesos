@@ -53,7 +53,6 @@ def launch(container, arguments):
     print >> sys.stderr, "Sending status protobuf."
 
     os.write(1, status.SerializeToString())
-    time.sleep(1)
     os.close(1)
 
     print >> sys.stderr, "Sent status protobuf."

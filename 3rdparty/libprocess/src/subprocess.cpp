@@ -148,7 +148,6 @@ Try<Subprocess> subprocess(
        inChild();
     }
 
-
     execle("/bin/sh", "sh", "-c", command.c_str(), (char*) NULL, envp());
 
     ABORT("Failed to execl '/bin sh -c ", command.c_str(), "'\n");

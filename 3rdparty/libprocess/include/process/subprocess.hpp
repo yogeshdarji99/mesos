@@ -50,9 +50,9 @@ private:
   {
     ~Data()
     {
-//      os::close(in);
-//      os::close(out);
-//      os::close(err);
+      os::close(in);
+      os::close(out);
+      os::close(err);
     }
 
     pid_t pid;

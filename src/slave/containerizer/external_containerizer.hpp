@@ -160,8 +160,8 @@ private:
   // Information describing a container environment.
   struct Sandbox
   {
-    Sandbox(const std::string& directory, const Option<std::string>& user) :
-      directory(directory), user(user) {};
+    Sandbox(const std::string& directory, const Option<std::string>& user)
+      : directory(directory), user(user) {}
 
     const std::string directory;
     const Option<std::string> user;
@@ -240,6 +240,9 @@ private:
   // in the container.
   void cleanup(const ContainerID& containerId);
 
+  // Information describing a child process.
+  // TODO(tillt): Remove and use process::Subprocess once it fits our
+  // needs here. See childProcessStart below.
   struct ChildProcess
   {
     ChildProcess(
@@ -251,20 +254,15 @@ private:
       : pid(pid), in(in), out(out), err(err), status(status) {};
 
     pid_t pid;
+
     int in;
     int out;
     int err;
+
     process::Future<Option<int> > status;
   };
 
-  Try<ChildProcess> childProcessStart(
-      const std::vector<std::string>& argv,
-      const std::string& directory,
-      const std::map<std::string, std::string>& childEnvironment =
-        std::map<std::string, std::string>());
-
-  // Call the external, pluggable containerizer and open a pipe for
-  // receiving results from that command.
+  // Call the external, pluggable containerizer.
   Try<ChildProcess> invoke(
       const std::string& command,
       const ContainerID& containerId);
@@ -280,6 +278,17 @@ private:
       const std::map<std::string, std::string>& environment,
       const ContainerID& containerId,
       const std::string& output);
+
+  // Fork-exec a child process.
+  // TODO(tillt): Remove and use process::subprocess once that has
+  // become flexible enough to support all features needed:
+  // - in-child-context commands (chdir) after fork and before exec.
+  // - direct execution without the invocation of /bin/sh.
+  // - external ownership of pipe file descriptors.
+  Try<ChildProcess> childProcessStart(
+      const std::vector<std::string>& argv,
+      const std::string& directory,
+      const std::map<std::string, std::string>& childEnvironment) const;
 };
 
 // Get an ExecutorInfo that is specific to a container.
@@ -289,8 +298,8 @@ ExecutorInfo containerExecutorInfo(
     const FrameworkID& frameworkId);
 
 // Get a human readable error string from an initializing error of a
-// message.
-std::string initializationError(const google::protobuf::Message& message);
+// protobuf message.
+std::string protobufError(const google::protobuf::Message& message);
 
 } // namespace slave {
 } // namespace internal {

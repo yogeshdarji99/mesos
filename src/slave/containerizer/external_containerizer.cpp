@@ -57,6 +57,7 @@ using tuples::tuple;
 
 using namespace process;
 
+// Process user environment.
 extern char** environ;
 
 namespace mesos {
@@ -310,6 +311,7 @@ Future<ExecutorInfo> ExternalContainerizerProcess::launch(
   // Observe the process status and install a callback for status
   // changes.
   invoked.get().status
+    .onAny(lambda::bind(os::close, invoked.get().err))
     .onAny(defer(
         PID<ExternalContainerizerProcess>(this),
         &ExternalContainerizerProcess::reaped,
@@ -363,12 +365,12 @@ Future<ExecutorInfo> ExternalContainerizerProcess::_launch(
   }
 
   if (!support.get()) {
-    // We generaly need to use an internal implementation in these
+    // We generally need to use an internal implementation in these
     // cases.
     // For the specific case of a launch however, there can not be an
     // internal implementation for a external containerizer, hence
     // we need to fail or even abort at this point.
-    // TODO(tillt): Consider using posix-isolator as a fallback.
+    // TODO(tillt): Consider using posix-isolator as a fall back.
     terminate(containerId);
     return Failure("External containerizer does not support launch");
   }
@@ -381,7 +383,7 @@ Future<ExecutorInfo> ExternalContainerizerProcess::_launch(
     // to protocol breach but only fail the operation.
     terminate(containerId);
     return Failure("Could not parse launch result protobuf (error: "
-      + initializationError(ps) + ")");
+      + protobufError(ps) + ")");
   }
 
   VLOG(2) << "Launch result: '" << ps.message() << "'";
@@ -423,10 +425,8 @@ Future<Containerizer::Termination> ExternalContainerizerProcess::wait(
     return Failure("Container '" + containerId.value() + "' not running");
   }
 
-  LOG(INFO) << "invoking";
   Try<ChildProcess> invoked = invoke("wait", containerId);
 
-  LOG(INFO) << "invoked";
   if (invoked.isError()) {
     LOG(ERROR) << "not running";
     terminate(containerId);
@@ -438,6 +438,7 @@ Future<Containerizer::Termination> ExternalContainerizerProcess::wait(
   // process.
   await(read(invoked.get().out), invoked.get().status)
     .onAny(lambda::bind(os::close, invoked.get().out))
+    .onAny(lambda::bind(os::close, invoked.get().err))
     .onAny(defer(
         PID<ExternalContainerizerProcess>(this),
         &ExternalContainerizerProcess::_wait,
@@ -482,7 +483,7 @@ void ExternalContainerizerProcess::_wait(
       // TODO(tillt): Consider not terminating the containerizer due
       // to protocol breach but only fail the operation.
       run->termination.fail("Could not parse wait result protobuf (error: "
-        + initializationError(pt) + ")");
+        + protobufError(pt) + ")");
       return;
     }
 
@@ -538,6 +539,7 @@ Future<Nothing> ExternalContainerizerProcess::update(
   // process.
   return await(read(invoked.get().out), invoked.get().status)
     .onAny(lambda::bind(os::close, invoked.get().out))
+    .onAny(lambda::bind(os::close, invoked.get().err))
     .then(defer(
         PID<ExternalContainerizerProcess>(this),
         &ExternalContainerizerProcess::_update,
@@ -572,7 +574,7 @@ Future<Nothing> ExternalContainerizerProcess::_update(
       // to protocol breach but only fail the operation.
       terminate(containerId);
       return Failure("Could not parse update result protobuf (error: "
-        + initializationError(ps) + ")");
+        + protobufError(ps) + ")");
     }
 
     VLOG(2) << "Update result: '" << ps.message() << "'";
@@ -609,6 +611,7 @@ Future<ResourceStatistics> ExternalContainerizerProcess::usage(
   // process.
   return await(read(invoked.get().out), invoked.get().status)
     .onAny(lambda::bind(os::close, invoked.get().out))
+    .onAny(lambda::bind(os::close, invoked.get().err))
     .then(defer(
         PID<ExternalContainerizerProcess>(this),
         &ExternalContainerizerProcess::_usage,
@@ -724,7 +727,7 @@ Future<ResourceStatistics> ExternalContainerizerProcess::_usage(
       // to protocol breach but only fail the operation.
       terminate(containerId);
       return Failure("Could not parse usage result protobuf (error: "
-        + initializationError(statistics) + ")");
+        + protobufError(statistics) + ")");
     }
 
     VLOG(2) << "Usage result: '" << statistics.DebugString() << "'";
@@ -764,6 +767,7 @@ void ExternalContainerizerProcess::destroy(const ContainerID& containerId)
   // process.
   await(read(invoked.get().out), invoked.get().status)
     .onAny(lambda::bind(os::close, invoked.get().out))
+    .onAny(lambda::bind(os::close, invoked.get().err))
     .onAny(defer(
         PID<ExternalContainerizerProcess>(this),
         &ExternalContainerizerProcess::_destroy,
@@ -793,7 +797,7 @@ void ExternalContainerizerProcess::_destroy(
       ExternalStatus ps;
       if (!ps.ParseFromString(result)) {
         LOG(ERROR) << "Could not parse update result protobuf (error: "
-                   << initializationError(ps) << ")";
+                   << protobufError(ps) << ")";
         // Continue regular program flow as we need to kill the
         // containerizer process.
       }
@@ -1063,117 +1067,6 @@ Try<ExternalContainerizerProcess::ChildProcess>
 
 
 Try<ExternalContainerizerProcess::ChildProcess>
-  ExternalContainerizerProcess::childProcessStart(
-      const vector<string>& argv,
-      const string& directory,
-      const map<string, string>& childEnvironment)
-{
-  // Create pipes for stdin, stdout, stderr.
-  // Index 0 is for reading, and index 1 is for writing.
-  int stdinPipe[2];
-  int stdoutPipe[2];
-  int stderrPipe[2];
-
-  if (pipe(stdinPipe) == -1) {
-    return ErrnoError("Failed to create pipe");
-  } else if (pipe(stdoutPipe) == -1) {
-    os::close(stdinPipe[0]);
-    os::close(stdinPipe[1]);
-    return ErrnoError("Failed to create pipe");
-  } else if (pipe(stderrPipe) == -1) {
-    os::close(stdinPipe[0]);
-    os::close(stdinPipe[1]);
-    os::close(stdoutPipe[0]);
-    os::close(stdoutPipe[1]);
-    return ErrnoError("Failed to create pipe");
-  }
-
-  // Render c-string argument vector.
-  vector<const char*> arguments;
-  foreach(const string& arg, argv) {
-    arguments.push_back(arg.c_str());
-  }
-  arguments.push_back(NULL);
-
-  // Render c-string environment vector while including the slave
-  // process environmant.
-  std::vector<const char*> environment;
-
-  // Transform environment map to joined environment strings.
-  std::vector<Owned<const string> > joinedChildEnv;
-  foreachpair (const string& key, const string& value, childEnvironment) {
-    Owned<const string> joined = Owned<const string>(
-        new const string(key + "=" + value));
-    joinedChildEnv.push_back(joined);
-    environment.push_back(joined->c_str());
-  }
-  char** parentEnv = environ;
-  while (*parentEnv) {
-    environment.push_back(*parentEnv);
-    ++parentEnv;
-  }
-  environment.push_back(NULL);
-
-  pid_t pid;
-  if ((pid = fork()) == -1) {
-    os::close(stdinPipe[0]);
-    os::close(stdinPipe[1]);
-    os::close(stdoutPipe[0]);
-    os::close(stdoutPipe[1]);
-    os::close(stderrPipe[0]);
-    os::close(stderrPipe[1]);
-    return ErrnoError("Failed to fork");
-  }
-
-  if (pid == 0) {
-    // Child.
-    // Close parent's end of the pipes.
-    os::close(stdinPipe[1]);
-    os::close(stdoutPipe[0]);
-    os::close(stderrPipe[0]);
-    // Make our pipes look like stdin, stderr, stdout before we exec.
-    while (dup2(stdinPipe[0], STDIN_FILENO)   == -1 && errno == EINTR);
-    while (dup2(stdoutPipe[1], STDOUT_FILENO) == -1 && errno == EINTR);
-    while (dup2(stderrPipe[1], STDERR_FILENO) == -1 && errno == EINTR);
-    // Close the copies.
-    os::close(stdinPipe[0]);
-    os::close(stdoutPipe[1]);
-    os::close(stderrPipe[1]);
-
-    // chdir into the given path. Silence warnings on unused return
-    // value.
-    if (::chdir(directory.c_str()) < 0) {};
-
-    // Both args and envp have to be c-style typecasted at this point.
-    // std::vector members are guaranteed to be organized in a linear
-    // memory region, hence those typecasts are safe.
-    execve(
-        arguments[0],
-        (char* const*)&arguments[0],
-        (char* const*)&environment[0]);
-
-    ABORT("Failed to execve ", arguments[0],  "\n");
-  }
-
-  // Parent.
-
-  // Close the child's end of the pipes.
-  os::close(stdinPipe[0]);
-  os::close(stdoutPipe[1]);
-  os::close(stderrPipe[1]);
-
-  // Transfer ownership of the pipe's file descriptors. Start reaping
-  // the child process.
-  return ChildProcess(
-      pid,
-      stdinPipe[1],
-      stdoutPipe[0],
-      stderrPipe[0],
-      process::reap(pid));
-}
-
-
-Try<ExternalContainerizerProcess::ChildProcess>
   ExternalContainerizerProcess::invoke(
       const string& command,
       const vector<string>& parameters,
@@ -1209,8 +1102,8 @@ Try<ExternalContainerizerProcess::ChildProcess>
         sandboxes[containerId]->user.get(),
         sandboxes[containerId]->directory);
     if (chown.isError()) {
-      return Error(string("Failed to chown work directory: ")
-        + strerror(errno));
+      return Error(string("Failed to chown work directory: ") +
+        strerror(errno));
     }
   }
 
@@ -1220,8 +1113,8 @@ Try<ExternalContainerizerProcess::ChildProcess>
   // supports:
   // - in-child-context commands (chdir) after fork and before
   // exec.
-  // - direct execution without the invocation of /bin/sh
-  // - external ownership of pipe file descriptors
+  // - direct execution without the invocation of /bin/sh.
+  // - external ownership of pipe file descriptors.
   Try<ChildProcess> external = childProcessStart(
       argv,
       sandboxes[containerId]->directory,
@@ -1287,6 +1180,116 @@ Try<ExternalContainerizerProcess::ChildProcess>
 }
 
 
+Try<ExternalContainerizerProcess::ChildProcess>
+  ExternalContainerizerProcess::childProcessStart(
+      const vector<string>& argv,
+      const string& directory,
+      const map<string, string>& childEnvironment) const
+{
+  // Create pipes for stdin, stdout, stderr.
+  // Index 0 is for reading, and index 1 is for writing.
+  int stdinPipe[2];
+  int stdoutPipe[2];
+  int stderrPipe[2];
+
+  if (pipe(stdinPipe) == -1) {
+    return ErrnoError("Failed to create pipe");
+  } else if (pipe(stdoutPipe) == -1) {
+    os::close(stdinPipe[0]);
+    os::close(stdinPipe[1]);
+    return ErrnoError("Failed to create pipe");
+  } else if (pipe(stderrPipe) == -1) {
+    os::close(stdinPipe[0]);
+    os::close(stdinPipe[1]);
+    os::close(stdoutPipe[0]);
+    os::close(stdoutPipe[1]);
+    return ErrnoError("Failed to create pipe");
+  }
+
+  // Render c-string argument vector.
+  vector<const char*> arguments;
+  foreach(const string& arg, argv) {
+    arguments.push_back(arg.c_str());
+  }
+  arguments.push_back(NULL);
+
+  // Render c-string environment vector while appending the slave
+  // process environment.
+  std::vector<const char*> environment;
+  // Transform environment map into joined environment strings.
+  std::vector<Owned<const string> > joinedChildEnv;
+  foreachpair (const string& key, const string& value, childEnvironment) {
+    Owned<const string> joined = Owned<const string>(
+        new const string(key + "=" + value));
+    joinedChildEnv.push_back(joined);
+    environment.push_back(joined->c_str());
+  }
+  char** parentEnv = environ;
+  while (*parentEnv) {
+    environment.push_back(*parentEnv);
+    ++parentEnv;
+  }
+  environment.push_back(NULL);
+
+  pid_t pid;
+  if ((pid = fork()) == -1) {
+    os::close(stdinPipe[0]);
+    os::close(stdinPipe[1]);
+    os::close(stdoutPipe[0]);
+    os::close(stdoutPipe[1]);
+    os::close(stderrPipe[0]);
+    os::close(stderrPipe[1]);
+    return ErrnoError("Failed to fork");
+  }
+
+  if (pid == 0) {
+    // Child.
+    // Close parent's end of the pipes.
+    os::close(stdinPipe[1]);
+    os::close(stdoutPipe[0]);
+    os::close(stderrPipe[0]);
+    // Make our pipes look like stdin, stderr, stdout before we exec.
+    while (dup2(stdinPipe[0], STDIN_FILENO)   == -1 && errno == EINTR);
+    while (dup2(stdoutPipe[1], STDOUT_FILENO) == -1 && errno == EINTR);
+    while (dup2(stderrPipe[1], STDERR_FILENO) == -1 && errno == EINTR);
+    // Close the copies.
+    os::close(stdinPipe[0]);
+    os::close(stdoutPipe[1]);
+    os::close(stderrPipe[1]);
+
+    // chdir into the given path. Silence warnings on unused return
+    // value.
+    if (::chdir(directory.c_str()) < 0) {}
+
+    // Both args and envp have to be c-style typecasted at this point.
+    // std::vector members are guaranteed to be organized in a linear
+    // memory region, hence those typecasts are safe.
+    execve(
+        arguments[0],
+        (char* const*)&arguments[0],
+        (char* const*)&environment[0]);
+
+    ABORT("Failed to execve ", arguments[0],  "\n");
+  }
+
+  // Parent.
+
+  // Close the child's end of the pipes.
+  os::close(stdinPipe[0]);
+  os::close(stdoutPipe[1]);
+  os::close(stderrPipe[1]);
+
+  // Transfer ownership of the pipe's file descriptors. Start reaping
+  // the child process.
+  return ChildProcess(
+      pid,
+      stdinPipe[1],
+      stdoutPipe[0],
+      stderrPipe[0],
+      process::reap(pid));
+}
+
+
 ExecutorInfo containerExecutorInfo(
     const Flags& flags,
     const TaskInfo& task,
@@ -1321,7 +1324,7 @@ ExecutorInfo containerExecutorInfo(
 }
 
 
-string initializationError(const google::protobuf::Message& message)
+string protobufError(const google::protobuf::Message& message)
 {
   vector<string> errors;
   message.FindInitializationErrors(&errors);
