@@ -1081,9 +1081,10 @@ Try<int> ExternalContainerizerProcess::status(const ResultFutures& futures)
 }
 
 
-Try<ChildProcess> ExternalContainerizerProcess::invoke(
-    const string& command,
-    const ContainerID& containerId)
+Try<ExternalContainerizerProcess::ChildProcess>
+  ExternalContainerizerProcess::invoke(
+      const string& command,
+      const ContainerID& containerId)
 {
   string output;
   return invoke(
@@ -1093,10 +1094,11 @@ Try<ChildProcess> ExternalContainerizerProcess::invoke(
 }
 
 
-Try<ChildProcess> ExternalContainerizerProcess::invoke(
-    const string& command,
-    const ContainerID& containerId,
-    const string& output)
+Try<ExternalContainerizerProcess::ChildProcess>
+  ExternalContainerizerProcess::invoke(
+      const string& command,
+      const ContainerID& containerId,
+      const string& output)
 {
   vector<string> parameters;
   map<string, string> environment;
@@ -1109,24 +1111,11 @@ Try<ChildProcess> ExternalContainerizerProcess::invoke(
 }
 
 
-struct ChildFunction {
-  ChildFunction(const string& path) : path(path) {};
-
-  void operator ()()
-  {
-    // Silence compiler warnings.
-    if (::chdir(path.c_str()) < 0) {
-      return;
-    }
-  }
-  const string& path;
-};
-
-
-Try<ChildProcess> ExternalContainerizerProcess::childProcessStart(
-    const string& command,
-    const map<string, string>& env,
-    const lambda::function<void()>& inChild)
+Try<ExternalContainerizerProcess::ChildProcess>
+  ExternalContainerizerProcess::childProcessStart(
+      const vector<string>& argv,
+      const string& directory,
+      const map<string, string>& childEnvironment)
 {
   // Create pipes for stdin, stdout, stderr.
   // Index 0 is for reading, and index 1 is for writing.
@@ -1148,24 +1137,31 @@ Try<ChildProcess> ExternalContainerizerProcess::childProcessStart(
     return ErrnoError("Failed to create pipe");
   }
 
-  ChildProcess childProcess;
+  // Render c-string argument vector.
+  vector<const char*> arguments;
+  foreach(const string& arg, argv) {
+    arguments.push_back(arg.c_str());
+  }
+  arguments.push_back(NULL);
 
-  std::vector<const char*> list;
-  std::vector<Owned<const string> > environment;
-  foreachpair (const string& key, const string& value, env) {
-    Owned<const string> pair = Owned<const string>(
+  // Render c-string environment vector while including the slave
+  // process environmant.
+  std::vector<const char*> environment;
+
+  // Transform environment map to joined environment strings.
+  std::vector<Owned<const string> > joinedChildEnv;
+  foreachpair (const string& key, const string& value, childEnvironment) {
+    Owned<const string> joined = Owned<const string>(
         new const string(key + "=" + value));
-    environment.push_back(pair);
-    list.push_back(pair->c_str());
+    joinedChildEnv.push_back(joined);
+    environment.push_back(joined->c_str());
   }
   char** parentEnv = environ;
   while (*parentEnv) {
-    list.push_back(*parentEnv);
+    environment.push_back(*parentEnv);
     ++parentEnv;
   }
-  list.push_back(NULL);
-
-  const char** envp = &list[0];
+  environment.push_back(NULL);
 
   pid_t pid;
   if ((pid = fork()) == -1) {
@@ -1178,33 +1174,35 @@ Try<ChildProcess> ExternalContainerizerProcess::childProcessStart(
     return ErrnoError("Failed to fork");
   }
 
-  childProcess.pid = pid;
 
-  if (childProcess.pid == 0) {
+  if (pid == 0) {
     // Child.
     // Close parent's end of the pipes.
     os::close(stdinPipe[1]);
     os::close(stdoutPipe[0]);
     os::close(stderrPipe[0]);
-
     // Make our pipes look like stdin, stderr, stdout before we exec.
     while (dup2(stdinPipe[0], STDIN_FILENO)   == -1 && errno == EINTR);
     while (dup2(stdoutPipe[1], STDOUT_FILENO) == -1 && errno == EINTR);
     while (dup2(stderrPipe[1], STDERR_FILENO) == -1 && errno == EINTR);
-
     // Close the copies.
     os::close(stdinPipe[0]);
     os::close(stdoutPipe[1]);
     os::close(stderrPipe[1]);
 
-    // Run function in child context.
-    if (inChild) {
-       inChild();
-    }
+    // chdir into the given path. Silence warnings on unused return
+    // value.
+    if (::chdir(directory.c_str()) < 0) {};
 
-    execle("/bin/sh", "sh", "-c", command.c_str(), (char*) NULL, envp);
+    // Both args and envp have to be c-style typecasted at this point.
+    // std::vector members are guaranteed to be organized in a linear
+    // memory region, hence those typecasts are safe.
+    execve(
+        arguments[0],
+        (char* const*)&arguments[0],
+        (char* const*)&environment[0]);
 
-    ABORT("Failed to execl '/bin sh -c ", command.c_str(), "'\n");
+    ABORT("Failed to execve ", arguments[0],  "\n");
   }
 
   // Parent.
@@ -1214,22 +1212,24 @@ Try<ChildProcess> ExternalContainerizerProcess::childProcessStart(
   os::close(stdoutPipe[1]);
   os::close(stderrPipe[1]);
 
-  childProcess.in = stdinPipe[1];
-  childProcess.out = stdoutPipe[0];
-  childProcess.err = stderrPipe[0];
-
-  childProcess.status = process::reap(childProcess.pid);
-
-  return childProcess;
+  // Transfer ownership of the pipe's file descriptors. Start reaping
+  // the child process.
+  return ChildProcess(
+      pid,
+      stdinPipe[1],
+      stdoutPipe[0],
+      stderrPipe[0],
+      process::reap(pid));
 }
 
 
-Try<ChildProcess> ExternalContainerizerProcess::invoke(
-    const string& command,
-    const vector<string>& parameters,
-    const map<string, string>& environment,
-    const ContainerID& containerId,
-    const string& output)
+Try<ExternalContainerizerProcess::ChildProcess>
+  ExternalContainerizerProcess::invoke(
+      const string& command,
+      const vector<string>& parameters,
+      const map<string, string>& environment,
+      const ContainerID& containerId,
+      const string& output)
 {
   CHECK(flags.containerizer_path.isSome())
     << "containerizer_path not set";
@@ -1266,11 +1266,16 @@ Try<ChildProcess> ExternalContainerizerProcess::invoke(
 
   // Fork exec of external process. Run a chdir within the child-
   // context.
+  // TODO(tillt): Shift over to using process::Subprocess once it
+  // supports:
+  // - in-child-context commands (chdir) after fork and before
+  // exec.
+  // - direct execution without the invocation of /bin/sh
+  // - external ownership of pipe file descriptors
   Try<ChildProcess> external = childProcessStart(
-      strings::join(" ", argv),
+      argv,
+      sandboxes[containerId]->directory,
       environment);
-
-      //      ChildFunction(sandboxes[containerId]->directory));
 
   if (external.isError()) {
     return Error(string("Failed to execute external containerizer: ")
@@ -1308,10 +1313,6 @@ Try<ChildProcess> ExternalContainerizerProcess::invoke(
   io::splice(external.get().err, err.get())
     .onAny(lambda::bind(&os::close, err.get()));
 
-  // Return the external containerizer's output pipe for receiving
-  // protobuffed results.
-  //resultPipe = external.get().out();
-
   // Transmit protobuf data via stdout towards the external
   // containerizer.
   if (output.length() > 0) {
@@ -1329,10 +1330,8 @@ Try<ChildProcess> ExternalContainerizerProcess::invoke(
   // We are done sending data to the external process, close the pipe.
   os::close(external.get().in);
 
-  VLOG(2) << "===========================";
   VLOG(2) << "Returning PID:" << external.get().pid;
-  VLOG(2) << "Child's output pipe:" << external.get().out;
-  VLOG(2) << "===========================";
+  VLOG(2) << "Child output pipe:" << external.get().out;
 
   return external;
 }

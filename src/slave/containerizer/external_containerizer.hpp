@@ -93,18 +93,6 @@ private:
 };
 
 
-struct ChildProcess
-{
-  pid_t pid;
-
-  int in;
-  int out;
-  int err;
-
-  process::Future<Option<int> > status;
-};
-
-
 class ExternalContainerizerProcess
   : public process::Process<ExternalContainerizerProcess>
 {
@@ -252,11 +240,28 @@ private:
   // in the container.
   void cleanup(const ContainerID& containerId);
 
+  struct ChildProcess
+  {
+    ChildProcess(
+        pid_t pid,
+        int in,
+        int out,
+        int err,
+        const process::Future<Option<int> >& status)
+      : pid(pid), in(in), out(out), err(err), status(status) {};
+
+    pid_t pid;
+    int in;
+    int out;
+    int err;
+    process::Future<Option<int> > status;
+  };
+
   Try<ChildProcess> childProcessStart(
-      const std::string& command,
-      const std::map<std::string, std::string>& env =
-        std::map<std::string, std::string>(),
-      const lambda::function<void()>& inChild = NULL);
+      const std::vector<std::string>& argv,
+      const std::string& directory,
+      const std::map<std::string, std::string>& childEnvironment =
+        std::map<std::string, std::string>());
 
   // Call the external, pluggable containerizer and open a pipe for
   // receiving results from that command.
