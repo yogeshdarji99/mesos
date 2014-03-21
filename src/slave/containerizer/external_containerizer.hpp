@@ -146,7 +146,7 @@ private:
   // Information describing a running container process.
   struct Running
   {
-    Running(pid_t _pid) : pid(_pid) {}
+    Running(pid_t pid) : pid(pid) {}
 
     const pid_t pid;
     process::Promise<Containerizer::Termination> termination;
@@ -253,11 +253,11 @@ private:
         const process::Future<Option<int> >& status)
       : pid(pid), in(in), out(out), err(err), status(status) {};
 
-    pid_t pid;
+    const pid_t pid;
 
-    int in;
-    int out;
-    int err;
+    const int in;
+    const int out;
+    const int err;
 
     process::Future<Option<int> > status;
   };

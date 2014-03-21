@@ -178,18 +178,18 @@ Future<Nothing> ExternalContainerizerProcess::recover(
 
         // We are only interested in the latest run of the executor!
         const ContainerID& containerId = executor.latest.get();
-        CHECK(executor.runs.contains(containerId));
-        const RunState& run = executor.runs.get(containerId).get();
+        Option<RunState> run = executor.runs.get(containerId);
+        CHECK_SOME(run);
 
         // We need the pid so the reaper can monitor the executor so skip this
         // executor if it's not present. This is not an error because the slave
         // will try to wait on the container which will return a failed
         // Termination and everything will get cleaned up.
-        if (!run.forkedPid.isSome()) {
+        if (!run.get().forkedPid.isSome()) {
           continue;
         }
 
-        if (run.completed) {
+        if (run.get().completed) {
           LOG(INFO) << "Skipping recovery of executor '" << executor.id
                     << "' of framework " << framework.id
                     << " because its latest run '" << containerId << "'"
@@ -197,7 +197,7 @@ Future<Nothing> ExternalContainerizerProcess::recover(
           continue;
         }
 
-        const pid_t pid(run.forkedPid.get());
+        const pid_t pid(run.get().forkedPid.get());
 
         running.put(containerId, Owned<Running>(new Running(pid)));
 
@@ -223,7 +223,8 @@ Future<Nothing> ExternalContainerizerProcess::recover(
         const Option<string>& user = flags.switch_user
           ? Option<string>(framework.info.get().user()) : None();
 
-        sandboxes.put(containerId,
+        sandboxes.put(
+          containerId,
           Owned<Sandbox>(new Sandbox(directory, user)));
       }
     }
@@ -916,6 +917,8 @@ void ExternalContainerizerProcess::terminate(const ContainerID& containerId)
 
   pid_t pid = running[containerId]->pid;
 
+  VLOG(2) << "About to send a SIGTERM to: " << pid;
+
   // Terminate the containerizer and all processes in the containerizer's
   // process group and session.
   Try<list<os::ProcessTree> > trees =
@@ -1135,17 +1138,6 @@ Try<ExternalContainerizerProcess::ChildProcess>
     return Error("Failed to redirect stderr:" + err.error());
   }
 
-  if (sandboxes[containerId]->user.isSome()) {
-    Try<Nothing> chown = os::chown(
-        sandboxes[containerId]->user.get(),
-        path::join(sandboxes[containerId]->directory, "stderr"));
-
-    if (chown.isError()) {
-      os::close(err.get());
-      return Error("Failed to redirect stderr:" + chown.error());
-    }
-  }
-
   Try<Nothing> nonblock = os::nonblock(external.get().err);
   if (nonblock.isError()) {
     os::close(err.get());
@@ -1247,23 +1239,32 @@ Try<ExternalContainerizerProcess::ChildProcess>
     os::close(stdinPipe[1]);
     os::close(stdoutPipe[0]);
     os::close(stderrPipe[0]);
+
     // Make our pipes look like stdin, stderr, stdout before we exec.
-    while (dup2(stdinPipe[0], STDIN_FILENO)   == -1 && errno == EINTR);
-    while (dup2(stdoutPipe[1], STDOUT_FILENO) == -1 && errno == EINTR);
-    while (dup2(stderrPipe[1], STDERR_FILENO) == -1 && errno == EINTR);
+    while (::dup2(stdinPipe[0], STDIN_FILENO)   == -1 && errno == EINTR);
+    while (::dup2(stdoutPipe[1], STDOUT_FILENO) == -1 && errno == EINTR);
+    while (::dup2(stderrPipe[1], STDERR_FILENO) == -1 && errno == EINTR);
+
     // Close the copies.
     os::close(stdinPipe[0]);
     os::close(stdoutPipe[1]);
     os::close(stderrPipe[1]);
 
-    // chdir into the given path. Silence warnings on unused return
-    // value.
-    if (::chdir(directory.c_str()) < 0) {}
+    // Put child into its own process session to prevent slave suicide
+    // on child process SIGKILL/SIGTERM.
+    if (::setsid() < 0) {
+      ABORT("Could not put external containerizer in its own process session");
+    }
+
+    // Re/establish the sandbox conditions for the containerizer.
+    if (::chdir(directory.c_str()) < 0) {
+      ABORT("Failed to chdir to work directory");
+    }
 
     // Both args and envp have to be c-style typecasted at this point.
     // std::vector members are guaranteed to be organized in a linear
     // memory region, hence those typecasts are safe.
-    execve(
+    ::execve(
         arguments[0],
         (char* const*)&arguments[0],
         (char* const*)&environment[0]);
