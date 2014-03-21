@@ -146,7 +146,6 @@ void ExternalContainerizer::destroy(const ContainerID& containerId)
 }
 
 
-
 ExternalContainerizerProcess::ExternalContainerizerProcess(
     const Flags& _flags) : flags(_flags) {}
 

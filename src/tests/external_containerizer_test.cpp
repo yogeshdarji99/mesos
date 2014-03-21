@@ -60,6 +60,9 @@ using testing::DoAll;
 using testing::Return;
 using testing::SaveArg;
 
+// TODO(tillt): Update and enhance the ExternalContainerizer tests,
+// possibly following some of the patterns used within the
+// IsolatorTests.
 class ExternalContainerizerTest : public MesosTest {};
 
 
