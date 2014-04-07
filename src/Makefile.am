@@ -130,6 +130,11 @@ REGISTRY_PROTOS = master/registry.pb.cc master/registry.pb.h
 BUILT_SOURCES += $(REGISTRY_PROTOS)
 CLEANFILES += $(REGISTRY_PROTOS)
 
+CONTAINERIZER_PROTOS = slave/containerizer/containerizer.pb.cc slave/containerizer/containerizer.pb.h
+
+BUILT_SOURCES += $(CONTAINERIZER_PROTOS)
+CLEANFILES += $(CONTAINERIZER_PROTOS)
+
 # Targets for generating protocol buffer code.
 %.pb.cc %.pb.h: $(top_srcdir)/include/mesos/%.proto
 	$(MKDIR_P) $(@D)
@@ -156,6 +161,7 @@ noinst_LTLIBRARIES += libmesos_no_3rdparty.la
 nodist_libmesos_no_3rdparty_la_SOURCES =				\
   $(CXX_PROTOS)								\
   $(MESSAGES_PROTOS)							\
+  $(CONTAINERIZER_PROTOS)						\
   $(REGISTRY_PROTOS)
 
 libmesos_no_3rdparty_la_SOURCES =					\
@@ -185,6 +191,7 @@ libmesos_no_3rdparty_la_SOURCES =					\
 	slave/containerizer/isolator.cpp				\
 	slave/containerizer/launcher.cpp				\
 	slave/containerizer/mesos_containerizer.cpp			\
+	slave/containerizer/external_containerizer.cpp			\
 	slave/status_update_manager.cpp					\
 	exec/exec.cpp							\
 	common/lock.cpp							\
@@ -250,6 +257,7 @@ libmesos_no_3rdparty_la_SOURCES += common/attributes.hpp		\
 	slave/containerizer/isolators/posix.hpp				\
 	slave/containerizer/launcher.hpp				\
 	slave/containerizer/mesos_containerizer.hpp			\
+	slave/containerizer/external_containerizer.hpp			\
 	slave/flags.hpp slave/gc.hpp slave/monitor.hpp			\
 	slave/paths.hpp slave/state.hpp					\
 	slave/status_update_manager.hpp					\
@@ -873,6 +881,7 @@ mesos_tests_SOURCES =				\
   tests/flags.cpp				\
   tests/gc_tests.cpp				\
   tests/isolator_tests.cpp			\
+  tests/external_containerizer_test.cpp		\
   tests/log_tests.cpp				\
   tests/logging_tests.cpp			\
   tests/main.cpp				\
@@ -939,7 +948,9 @@ if HAS_PYTHON
   EXAMPLESCRIPTSPYTHON = examples/python/test_framework.py		\
 			 examples/python/test-framework			\
 			 examples/python/test_executor.py		\
-			 examples/python/test-executor
+			 examples/python/test-executor			\
+			 examples/python/test_containerizer.py		\
+			 examples/python/test-containerizer
 
   check_SCRIPTS += $(EXAMPLESCRIPTSPYTHON)
   mesos_tests_DEPENDENCIES += $(EXAMPLESCRIPTSPYTHON)
