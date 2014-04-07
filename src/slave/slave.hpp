@@ -218,7 +218,7 @@ public:
       const ExecutorID& executorId,
       const ContainerID& containerId,
       const TaskInfo& task,
-      const process::Future<Nothing>& future);
+      const process::Future<ExecutorInfo>& future);
 
   void executorTerminated(
       const FrameworkID& frameworkId,
@@ -275,12 +275,6 @@ public:
 
   // Helper routine to lookup a framework.
   Framework* getFramework(const FrameworkID& frameworkId);
-
-  // Returns an ExecutorInfo for a TaskInfo (possibly
-  // constructing one if the task has a CommandInfo).
-  ExecutorInfo getExecutorInfo(
-      const FrameworkID& frameworkId,
-      const TaskInfo& task);
 
   // Handle the second phase of shutting down an executor for those
   // executors that have not properly shutdown within a timeout.
