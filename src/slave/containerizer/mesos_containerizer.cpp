@@ -436,6 +436,16 @@ Future<ExecutorInfo> MesosContainerizerProcess::launch(
   ExecutorInfo executorInfo = getExecutorInfo(flags, task, frameworkId);
   executorInfo.mutable_resources()->MergeFrom(task.resources());
 
+  // TODO(tillt): We should expose via the offer what containerization
+  // support is available on the slave so that a framework can avoid
+  // launching a task with a ContainerInfo if that task would just
+  // fail.
+  const CommandInfo& command = task.has_executor()
+    ? task.executor().command() : task.command();
+  if (command.has_container()) {
+    return Failure("ContainerInfo is not supported");
+  }
+
   if (promises.contains(containerId)) {
     LOG(ERROR) << "Cannot start already running container '"
                << containerId << "'";
