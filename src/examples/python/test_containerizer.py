@@ -97,8 +97,23 @@ def launch():
 
         proc = subprocess.Popen(command, env=os.environ.copy())
 
-# FIXME(*): Add pid persisting here. Something along the lines of
-# a mktemp + conatainerId + pid lock?!
+#   TODO(*): Locks for coordinating calls to wait/launch/&c.
+#
+#   import fcntl
+#
+#   lock_dir = "/tmp/mesos-test-containerizer"
+#   subprocess.checkcall(["mkdir", "-p", lock_dir])
+#   lock = os.path.join(lock_dir, containerId)
+#   pid = fork()
+#   if pid == 0: # We are in the child.
+#       proc = subprocess.Popen(command, env=os.environ.copy())
+#       with open(lock, "w+") as lk:
+#           fcntl.flock(lk, fcntl.LOCK_EX)
+#           returncode = proc.wait()
+#           lk.write(str(returncode) + "\n")
+#           sys.exit(returncode)
+#   else: # We are in the parent
+#       ## Assemble the launch info result and send to Mesos
 
     except google.protobuf.message.DecodeError:
         print >> sys.stderr, "Could not deserialise Launch protobuf"
@@ -219,7 +234,16 @@ def wait():
         containerId = mesos_pb2.ContainerID()
         containerId.ParseFromString(data)
 
-#FIXME(*): Add wait reaping of the executor here.
+#   TODO(*): Obtain shared lock and read exit code from file.
+#
+#   import fcntl
+#
+#   lock_dir = "/tmp/mesos-test-containerizer"
+#   lock = os.path.join(lock_dir, containerId)
+#   with open(lock, "r") as lk:
+#       fcntl.flock(lk, fcntl.LOCK_SH) # NB: shared lock
+#       returncode = int(lk.read())
+#       sys.exit(returncode)
 
     except google.protobuf.message.DecodeError:
         print >> sys.stderr, "Could not deserialise ContainerID protobuf."
