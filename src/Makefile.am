@@ -102,10 +102,12 @@ endif
 # First, let's define necessary protocol buffer files.
 
 MESOS_PROTO = $(top_srcdir)/include/mesos/mesos.proto
+CONTAINERIZER_PROTO = $(top_srcdir)/src/slave/containerizer/containerizer.proto
 
 CXX_PROTOS = mesos.pb.cc mesos.pb.h
 JAVA_PROTOS = java/generated/org/apache/mesos/Protos.java
 PYTHON_PROTOS = python/src/mesos_pb2.py
+CONTAINERIZER_PYTHON_PROTOS = python/src/containerizer_pb2.py
 
 BUILT_SOURCES += $(CXX_PROTOS) $(JAVA_PROTOS) $(PYTHON_PROTOS)
 CLEANFILES += $(CXX_PROTOS) $(JAVA_PROTOS) $(PYTHON_PROTOS)
@@ -130,7 +132,8 @@ REGISTRY_PROTOS = master/registry.pb.cc master/registry.pb.h
 BUILT_SOURCES += $(REGISTRY_PROTOS)
 CLEANFILES += $(REGISTRY_PROTOS)
 
-CONTAINERIZER_PROTOS = slave/containerizer/containerizer.pb.cc slave/containerizer/containerizer.pb.h
+CONTAINERIZER_PROTOS = slave/containerizer/containerizer.pb.cc \
+	slave/containerizer/containerizer.pb.h
 
 BUILT_SOURCES += $(CONTAINERIZER_PROTOS)
 CLEANFILES += $(CONTAINERIZER_PROTOS)
@@ -151,6 +154,11 @@ $(JAVA_PROTOS): $(MESOS_PROTO)
 $(PYTHON_PROTOS): $(MESOS_PROTO)
 	$(MKDIR_P) $(@D)
 	$(PROTOC) $(PROTOCFLAGS) --python_out=python/src $^
+
+$(CONTAINERIZER_PYTHON_PROTOS): $(CONTAINERIZER_PROTO)
+	$(MKDIR_P) $(@D)
+	$(PROTOC) -I$(top_srcdir)/src/slave/containerizer $(PROTOCFLAGS) \
+		--python_out=python/src $^
 
 # We even use a convenience library for most of Mesos so that we can
 # exclude third party libraries so setuptools/distribute can build a
@@ -795,7 +803,8 @@ CLEANFILES += $(PROTOBUF_EGG)
 MESOS_EGG = python/dist/mesos-$(PACKAGE_VERSION)$(PYTHON_EGG_POSTFIX).egg
 
 $(MESOS_EGG): python/setup.py $(srcdir)/python/src/mesos.py		\
-              $(PYTHON_PROTOS) libmesos_no_3rdparty.la			\
+              $(PYTHON_PROTOS) $(CONTAINERIZER_PYTHON_PROTOS) 		\
+              libmesos_no_3rdparty.la					\
               $(PROTOBUF_EGG)
 	@echo "Building Mesos Python egg ..."
 	@if test "$(top_srcdir)" != "$(top_builddir)"; then		\
