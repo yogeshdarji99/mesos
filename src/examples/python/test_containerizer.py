@@ -240,10 +240,19 @@ def wait():
 #
 #   lock_dir = "/tmp/mesos-test-containerizer"
 #   lock = os.path.join(lock_dir, containerId)
-#   with open(lock, "r") as lk:
-#       fcntl.flock(lk, fcntl.LOCK_SH) # NB: shared lock
-#       returncode = int(lk.read())
-#       sys.exit(returncode)
+#   n = 0
+#   while n < 100:
+#       try:
+#           with open(lock, "r") as lk:
+#               fcntl.flock(lk, fcntl.LOCK_SH) # NB: shared lock
+#               returncode = int(lk.read())
+#               sys.exit(returncode)
+#       except IOError as e:                       # Allows for signal
+#           if e.errno != errno.ENOENT:
+#               raise e
+#           n += 1
+#           time.sleep(0.01)
+#   sys.exit(2)
 
     except google.protobuf.message.DecodeError:
         print >> sys.stderr, "Could not deserialise ContainerID protobuf."
