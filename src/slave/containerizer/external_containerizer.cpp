@@ -158,6 +158,7 @@ Future<Nothing> ExternalContainerizerProcess::recover(
 {
   // Filter the executor run states that we attempt to recover and do
   // so.
+  /*
   if (state.isSome()) {
     foreachvalue (const FrameworkState& framework, state.get().frameworks) {
       foreachvalue (const ExecutorState& executor, framework.executors) {
@@ -230,7 +231,7 @@ Future<Nothing> ExternalContainerizerProcess::recover(
       }
     }
   }
-
+*/
   return Nothing();
 }
 
@@ -304,6 +305,34 @@ Future<ExecutorInfo> ExternalContainerizerProcess::launch(
   launch.set_mesos_executor_path(
       path::join(flags.launcher_dir, "mesos-executor"));
 
+    // Observe the executor process and install a callback for status
+  // changes.
+  // Checkpoint the container's pid if requested.
+  /*
+  if (checkpoint) {
+    const string& path = slave::paths::getForkedPidPath(
+        slave::paths::getMetaRootDir(flags.work_dir),
+        slaveId,
+        frameworkId,
+        executorInfo.executor_id(),
+        containerId);
+
+    LOG(INFO) << "Checkpointing containerized executor '" << containerId
+              << "' pid " << ps.pid() << " to '" << path <<  "'";
+
+    Try<Nothing> checkpointed =
+        slave::state::checkpoint(path, stringify(ps.pid()));
+
+    if (checkpointed.isError()) {
+      terminate(containerId);
+      return Failure("Failed to checkpoint containerized executor '"
+        + containerId.value() + "' pid " + stringify(ps.pid()) + " to '" + path
+        + "'");
+    }
+  }
+  */
+
+
   Try<Subprocess> invoked = invoke(
       "launch",
       containerId,
@@ -315,17 +344,8 @@ Future<ExecutorInfo> ExternalContainerizerProcess::launch(
       + "' failed (error: " + invoked.error() + ")");
   }
 
-  // Record the process.
-  containers.put(
-      containerId,
-      Owned<Container>(new Container(invoked.get().pid())));
-
-  process::reap(invoked.get().pid())
-    .onAny(defer(
-        PID<ExternalContainerizerProcess>(this),
-        &ExternalContainerizerProcess::reaped,
-        containerId,
-        lambda::_1));
+  // Record the successful container launch.
+  containers.put(containerId, Owned<Container>(new Container));
 
   // Read from the result-pipe and invoke callbacks when reaching EOF.
   return invoked.get().status()
@@ -361,32 +381,6 @@ Future<ExecutorInfo> ExternalContainerizerProcess::_launch(
     return Failure(done.error());
   }
 
-  // Observe the executor process and install a callback for status
-  // changes.
-  // Checkpoint the container's pid if requested.
-  /*
-  if (checkpoint) {
-    const string& path = slave::paths::getForkedPidPath(
-        slave::paths::getMetaRootDir(flags.work_dir),
-        slaveId,
-        frameworkId,
-        executorInfo.executor_id(),
-        containerId);
-
-    LOG(INFO) << "Checkpointing containerized executor '" << containerId
-              << "' pid " << ps.pid() << " to '" << path <<  "'";
-
-    Try<Nothing> checkpointed =
-        slave::state::checkpoint(path, stringify(ps.pid()));
-
-    if (checkpointed.isError()) {
-      terminate(containerId);
-      return Failure("Failed to checkpoint containerized executor '"
-        + containerId.value() + "' pid " + stringify(ps.pid()) + " to '" + path
-        + "'");
-    }
-  }
-  */
   VLOG(1) << "Launch finishing up for container '" << containerId << "'";
   return executorInfo;
 }
@@ -411,14 +405,14 @@ Future<containerizer::Termination> ExternalContainerizerProcess::wait(
       + "' failed (error: " + invoked.error() + ")");
   }
 
-  // Await both, input from the pipe as well as an exit of the
-  // process.
-  await(read(invoked.get().out()), invoked.get().status())
+  invoked.get().status()
     .onAny(defer(
         PID<ExternalContainerizerProcess>(this),
         &ExternalContainerizerProcess::_wait,
         containerId,
         lambda::_1));
+
+  containers[containerId]->pid = invoked.get().pid();
 
   return containers[containerId]->termination.future();
 }
@@ -426,7 +420,7 @@ Future<containerizer::Termination> ExternalContainerizerProcess::wait(
 
 void ExternalContainerizerProcess::_wait(
     const ContainerID& containerId,
-    const Future<ResultFutures>& future)
+    const Future<Option<int> >& future)
 {
   VLOG(1) << "Wait callback triggered on container '" << containerId << "'";
 
@@ -437,9 +431,9 @@ void ExternalContainerizerProcess::_wait(
 
   Owned<Container> container = containers[containerId];
 
-  Try<string> result = isDone(future);
-  if (result.isError()) {
-    container->termination.fail(result.error());
+  Try<Nothing> done = isDone(future);
+  if (done.isError()) {
+    container->termination.fail(done.error());
     return;
   }
 
@@ -449,6 +443,7 @@ void ExternalContainerizerProcess::_wait(
     container->waited.set(true);
   }
 
+  /*
   containerizer::Termination termination;
   if (!termination.ParseFromString(result.get())) {
     // TODO(tillt): Consider not terminating the containerizer due
@@ -458,11 +453,14 @@ void ExternalContainerizerProcess::_wait(
         + termination.InitializationErrorString() + ")");
     return;
   }
+  */
 
-  VLOG(2) << "Wait result: '" << termination.DebugString() << "'";
+  //VLOG(2) << "Wait result: '" << termination.DebugString() << "'";
 
-  // Satisfy the promise with the termination information we got
-  // from the external containerizer
+  containerizer::Termination termination;
+  termination.set_killed(false);
+  termination.set_message("");
+  termination.set_status(future.get().get());
   container->termination.set(termination);
 }
 
@@ -715,15 +713,9 @@ void ExternalContainerizerProcess::terminate(const ContainerID& containerId)
     return;
   }
 
-  if (containers[containerId]->pid.isNone()) {
-    LOG(WARNING) << "Ignoring executor termination for container '"
-                 << containerId << "' as it was not launched success";
-    return;
-  }
-
-  // Terminate the executor.
-  pid_t pid = containers[containerId]->pid.get();
-  VLOG(2) << "About to send a SIGKILL to executor pid: " << pid;
+  // Terminate the containerizer.
+  pid_t pid = containers[containerId]->pid;
+  VLOG(2) << "About to send a SIGKILL to containerizer pid: " << pid;
 
   // TODO(tillt): Add graceful termination as soon as we have an
   // accepted way to do that in place.

@@ -145,15 +145,10 @@ private:
   // Information describing a running container.
   struct Container
   {
-    Container(pid_t containerPid)
-      : containerPid(containerPid) {}
+    Container() {}
 
-    // External containerizer pid.
-    const pid_t containerPid;
-
-    // Containerized executor pid. This is an option as the external
-    // containerizer might fail to transmit it on 'launch'.
-    Option<pid_t> pid;
+    // External containerizer pid as per wait-invocation.
+    pid_t pid;
 
     process::Promise<containerizer::Termination> termination;
     process::Promise<bool> waited;
@@ -191,7 +186,7 @@ private:
 
   void _wait(
       const ContainerID& containerId,
-      const process::Future<ResultFutures>& future);
+      const process::Future<Option<int> >& future);
 
   process::Future<Nothing> _update(
       const ContainerID& containerId,

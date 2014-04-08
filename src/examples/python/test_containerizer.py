@@ -97,6 +97,9 @@ def launch():
 
         proc = subprocess.Popen(command, env=os.environ.copy())
 
+# FIXME(jason): Add pid persisting here. Something along the lines of
+# a mktemp + conatainerId + pid lock?!
+
     except google.protobuf.message.EncodeError:
         print >> sys.stderr, "Could not serialise ExternalStatus protobuf."
         return 1
@@ -192,6 +195,9 @@ def destroy():
 # filled with the information gathered from launch's waitpid via
 # stdout.
 def wait():
+
+#FIXME(jason): Add wait reaping of the executor here.
+
     return 0
 
 
