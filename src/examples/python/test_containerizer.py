@@ -97,15 +97,11 @@ def launch():
 
         proc = subprocess.Popen(command, env=os.environ.copy())
 
-# FIXME(jason): Add pid persisting here. Something along the lines of
+# FIXME(*): Add pid persisting here. Something along the lines of
 # a mktemp + conatainerId + pid lock?!
 
-    except google.protobuf.message.EncodeError:
-        print >> sys.stderr, "Could not serialise ExternalStatus protobuf."
-        return 1
-
     except google.protobuf.message.DecodeError:
-        print >> sys.stderr, "Could not deserialise ExternalTask protobuf"
+        print >> sys.stderr, "Could not deserialise Launch protobuf"
         return 1
 
     except OSError as e:
@@ -135,12 +131,8 @@ def update():
                            + str(len(update.resources.resource))    \
                            + " resource elements."
 
-    except google.protobuf.message.EncodeError:
-        print >> sys.stderr, "Could not serialise ExternalStatus protobuf."
-        return 1
-
     except google.protobuf.message.DecodeError:
-        print >> sys.stderr, "Could not deserialise ResourceArray protobuf."
+        print >> sys.stderr, "Could not deserialise Update protobuf."
         return 1
 
     except OSError as e:
@@ -159,6 +151,12 @@ def update():
 # successful.
 def usage():
     try:
+        data = receive()
+        if len(data) == 0:
+            return 1
+        containerId = mesos_pb2.ContainerID()
+        containerId.ParseFromString(data)
+
         statistics = mesos_pb2.ResourceStatistics();
 
         statistics.timestamp = time.time();
@@ -171,6 +169,10 @@ def usage():
         statistics.cpus_system_time_secs = 0.5;
 
         send(statistics.SerializeToString());
+
+    except google.protobuf.message.DecodeError:
+        print >> sys.stderr, "Could not deserialise ContainerID protobuf."
+        return 1
 
     except google.protobuf.message.EncodeError:
         print >> sys.stderr, "Could not serialise ResourceStatistics protobuf."
@@ -187,6 +189,21 @@ def usage():
 # A complete implementation would deliver an ExternalStatus protobuf
 # when succesful.
 def destroy():
+    try:
+        data = receive()
+        if len(data) == 0:
+            return 1
+        containerId = mesos_pb2.ContainerID()
+        containerId.ParseFromString(data)
+
+    except google.protobuf.message.DecodeError:
+        print >> sys.stderr, "Could not deserialise ContainerID protobuf."
+        return 1
+
+    except OSError as e:
+        print >> sys.stderr, e.strerror
+        return 1
+
     return 0
 
 
@@ -195,8 +212,22 @@ def destroy():
 # filled with the information gathered from launch's waitpid via
 # stdout.
 def wait():
+    try:
+        data = receive()
+        if len(data) == 0:
+            return 1
+        containerId = mesos_pb2.ContainerID()
+        containerId.ParseFromString(data)
 
-#FIXME(jason): Add wait reaping of the executor here.
+#FIXME(*): Add wait reaping of the executor here.
+
+    except google.protobuf.message.DecodeError:
+        print >> sys.stderr, "Could not deserialise ContainerID protobuf."
+        return 1
+
+    except OSError as e:
+        print >> sys.stderr, e.strerror
+        return 1
 
     return 0
 
