@@ -2238,63 +2238,6 @@ Framework* Slave::getFramework(const FrameworkID& frameworkId)
 }
 
 
-ExecutorInfo Slave::getExecutorInfo(
-    const FrameworkID& frameworkId,
-    const TaskInfo& task)
-{
-  CHECK_NE(task.has_executor(), task.has_command())
-    << "Task " << task.task_id()
-    << " should have either CommandInfo or ExecutorInfo set but not both";
-
-  if (task.has_command()) {
-    ExecutorInfo executor;
-
-    // Command executors share the same id as the task.
-    executor.mutable_executor_id()->set_value(task.task_id().value());
-
-    executor.mutable_framework_id()->CopyFrom(frameworkId);
-
-    // Prepare an executor name which includes information on the
-    // command being launched.
-    string name =
-      "(Task: " + task.task_id().value() + ") " + "(Command: sh -c '";
-
-    if (task.command().value().length() > 15) {
-      name += task.command().value().substr(0, 12) + "...')";
-    } else {
-      name += task.command().value() + "')";
-    }
-
-    executor.set_name("Command Executor " + name);
-    executor.set_source(task.task_id().value());
-
-    // Copy the CommandInfo to get the URIs and environment, but
-    // update it to invoke 'mesos-executor' (unless we couldn't
-    // resolve 'mesos-executor' via 'realpath', in which case just
-    // echo the error and exit).
-    executor.mutable_command()->MergeFrom(task.command());
-
-    Result<string> path = os::realpath(
-        path::join(flags.launcher_dir, "mesos-executor"));
-
-    if (path.isSome()) {
-      executor.mutable_command()->set_value(path.get());
-    } else {
-      executor.mutable_command()->set_value(
-          "echo '" +
-          (path.isError()
-           ? path.error()
-           : "No such file or directory") +
-          "'; exit 1");
-    }
-
-    return executor;
-  }
-
-  return task.executor();
-}
-
-
 void _monitor(
     const Future<Nothing>& monitor,
     const FrameworkID& frameworkId,
@@ -2315,7 +2258,7 @@ void Slave::executorLaunched(
     const ExecutorID& executorId,
     const ContainerID& containerId,
     const TaskInfo& task,
-    const Future<Nothing>& future)
+    const Future<ExecutorInfo>& future)
 {
   if (!future.isReady()) {
     // The containerizer will clean up if the launch fails we'll just log this
@@ -2356,10 +2299,7 @@ void Slave::executorLaunched(
     return;
   }
 
-  // TODO(nnielsen): Remove this when containerizer returns a future
-  // to the chosen executor info.
-  CHECK(executor->info.isReady());
-  const ExecutorInfo& executorInfo = executor->info.get();
+  const ExecutorInfo& executorInfo = future.get();
 
   // For now, we only check that the executor id matches the task id
   // if no executor was provided in the task.
@@ -3313,22 +3253,11 @@ Executor* Framework::launch(const TaskInfo& task) {
                  lambda::_1,
                  executor->directory));
 
-  // TODO(nnielsen): Remove this when containerizer returns future to
-  // chosen executor info.
-  executor->info = slave->getExecutorInfo(id, task);
-
-  // Tell the containerizer to launch the executor.
-  // NOTE: We modify the ExecutorInfo to include the task's
-  // resources when launching the executor so that the containerizer
-  // has non-zero resources to work with when the executor has
-  // no resources. This should be revisited after MESOS-600.
-  ExecutorInfo executorInfo_ = executor->info.get();
-  executorInfo_.mutable_resources()->MergeFrom(task.resources());
-
   // Launch the container.
-  slave->containerizer->launch(
+  executor->info = slave->containerizer->launch(
       containerId,
-      executorInfo_, // modified to include the task's resources
+      task,
+      id,
       executor->directory,
       slave->flags.switch_user ? Option<string>(info.user()) : None(),
       slave->info.id(),
