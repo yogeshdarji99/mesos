@@ -137,9 +137,17 @@ message CommandInfo {
     optional bool executable = 2;
   }
 
+  // Describes a container that may be used.
+  message ContainerInfo {
+    required string image = 1;
+    repeated string options = 2;
+  }
+
   repeated URI uris = 1;
   optional Environment environment = 2;
   required string value = 3;
+
+  optional ContainerInfo container = 4;
 }
 
 
