@@ -32,6 +32,8 @@
 #include <stout/option.hpp>
 #include <stout/try.hpp>
 
+#include "slave/containerizer/containerizer.pb.h"
+
 namespace mesos {
 namespace internal {
 namespace slave {

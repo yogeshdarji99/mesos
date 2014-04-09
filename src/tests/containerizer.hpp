@@ -103,7 +103,7 @@ private:
   hashmap<std::pair<FrameworkID, ExecutorID>, ContainerID> containers;
   hashmap<ContainerID, process::Owned<MesosExecutorDriver> > drivers;
   hashmap<ContainerID,
-          process::Owned<process::Promise<Termination> > > promises;
+      process::Owned<process::Promise<Termination> > > promises;
 };
 
 } // namespace tests {

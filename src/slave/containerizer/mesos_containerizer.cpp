@@ -154,8 +154,7 @@ Future<ResourceStatistics> MesosContainerizer::usage(
 }
 
 
-Future<Termination> MesosContainerizer::wait(
-    const ContainerID& containerId)
+Future<Termination> MesosContainerizer::wait(const ContainerID& containerId)
 {
   return dispatch(process, &MesosContainerizerProcess::wait, containerId);
 }

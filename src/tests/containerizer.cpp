@@ -139,7 +139,8 @@ Future<ExecutorInfo> TestContainerizer::launch(
 }
 
 
-Future<Termination> TestContainerizer::wait(const ContainerID& containerId)
+Future<Termination> TestContainerizer::wait(
+    const ContainerID& containerId)
 {
   CHECK(promises.contains(containerId))
     << "Container " << containerId << "not started";
