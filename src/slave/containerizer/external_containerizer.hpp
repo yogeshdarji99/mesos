@@ -213,6 +213,13 @@ private:
   // SIGTERM and escalates if needed.
   void terminate(const ContainerID& containerId);
 
+  // Polls the given process tree for alive processess and SIGKILLs
+  // them as soon as the step reached 1.
+  void terminationPoll(
+      const std::list<os::ProcessTree> trees,
+      const Duration delay,
+      const unsigned int stepCount);
+
   // Call back for when the containerizer has terminated all processes
   // in the container.
   void cleanup(const ContainerID& containerId);

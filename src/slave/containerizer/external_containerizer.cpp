@@ -556,6 +556,39 @@ void ExternalContainerizerProcess::cleanup(
 }
 
 
+void ExternalContainerizerProcess::terminationPoll(
+    const list<os::ProcessTree> trees,
+    const Duration period,
+    const unsigned int stepCount)
+{
+  // Count number of live processes in process trees.
+  int running = 0;
+  foreach(const os::ProcessTree& tree, trees) {
+    running += tree.liveProcesses();
+  }
+
+  if (running > 0) {
+    if (stepCount <= 1) {
+      // We reached the total timeout of 5 seconds, send a SIGKILL to
+      // any processes that are still alive within that group.
+      foreach(const os::ProcessTree& tree, trees) {
+        os::killtree(tree, SIGKILL);
+      }
+      LOG(WARNING) << "Killed the following process tree/s:\n"
+                   << stringify(trees);
+    } else {
+      // Wait for a grace period and reevaluate the trees status.
+      delay(period,
+          self(),
+          &Self::terminationPoll,
+          trees,
+          period,
+          stepCount-1);
+    }
+  }
+}
+
+
 void ExternalContainerizerProcess::terminate(const ContainerID& containerId)
 {
   if (!containers.contains(containerId)) {
@@ -567,10 +600,8 @@ void ExternalContainerizerProcess::terminate(const ContainerID& containerId)
   pid_t pid = containers[containerId]->pid;
   VLOG(2) << "About to send a SIGKILL to containerizer pid: " << pid;
 
-  // TODO(tillt): Add graceful termination as soon as we have an
-  // accepted way to do that in place.
   Try<list<os::ProcessTree> > trees =
-    os::killtree(pid, SIGKILL, true, true);
+    os::killtree(pid, SIGTERM, true, true);
 
   if (trees.isError()) {
     LOG(WARNING) << "Failed to kill the process tree rooted at pid "
@@ -578,8 +609,17 @@ void ExternalContainerizerProcess::terminate(const ContainerID& containerId)
     return;
   }
 
-  LOG(INFO) << "Killed the following process tree/s:\n"
+  LOG(INFO) << "Terminated the following process tree/s:\n"
             << stringify(trees.get());
+
+  // Evaluate the trees status for possible escalation.
+
+  Duration graceTimeout = Seconds(5);
+  Duration gracePeriod = Milliseconds(250);
+  terminationPoll(
+      trees.get(),
+      gracePeriod,
+      static_cast<unsigned int>(graceTimeout.ns() / gracePeriod.ns()));
 }
 
 
