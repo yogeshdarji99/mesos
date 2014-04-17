@@ -163,9 +163,11 @@ void TestContainerizer::destroy(
 
 void TestContainerizer::destroy(const ContainerID& containerId)
 {
-  CHECK(drivers.contains(containerId))
-    << "Failed to terminate container " << containerId
-    << " because it is has not been started";
+  if (!drivers.contains(containerId)) {
+    LOG(WARNING) << "Failed to terminate container " << containerId
+                 << " because it is has not been started";
+    return;
+  }
 
   Owned<MesosExecutorDriver> driver = drivers[containerId];
   driver->stop();

@@ -93,6 +93,10 @@ public:
   void reregistered(const process::UPID& from, const SlaveID& slaveId);
   void doReliableRegistration();
 
+  process::Future<Nothing> _doReliableRegistration();
+
+  // Schedules _runTask() when work directories have been
+  // unscheduled from GC.
   void runTask(
       const process::UPID& from,
       const FrameworkInfo& frameworkInfo,
@@ -100,6 +104,7 @@ public:
       const std::string& pid,
       const TaskInfo& task);
 
+  // Schedules __runTask() once the executor is launched.
   void _runTask(
       const process::Future<bool>& future,
       const FrameworkInfo& frameworkInfo,
@@ -107,9 +112,25 @@ public:
       const std::string& pid,
       const TaskInfo& task);
 
+  // Send or enqueue runTaskMessage on executor when container has
+  // launched.
+  void __runTask(
+      const process::Future<Nothing>& future,
+      const FrameworkInfo& frameworkInfo,
+      const FrameworkID& frameworkId,
+      const ExecutorID& executorId,
+      const std::string& pid,
+      const TaskInfo& task);
+
   process::Future<bool> unschedule(const std::string& path);
 
   void killTask(
+      const process::UPID& from,
+      const FrameworkID& frameworkId,
+      const TaskID& taskId);
+
+  void _killTask(
+      const process::Future<Nothing>& future,
       const process::UPID& from,
       const FrameworkID& frameworkId,
       const TaskID& taskId);
@@ -131,11 +152,25 @@ public:
       const FrameworkID& frameworkId,
       const ExecutorID& executorId);
 
+  void _registerExecutor(
+      const process::Future<Nothing>& future,
+      const process::UPID& from,
+      const FrameworkID& frameworkId,
+      const ExecutorID& executorId);
+
   // Called when an executor re-registers with a recovering slave.
   // 'tasks' : Unacknowledged tasks (i.e., tasks that the executor
   //           driver never received an ACK for.)
   // 'updates' : Unacknowledged updates.
   void reregisterExecutor(
+      const process::UPID& from,
+      const FrameworkID& frameworkId,
+      const ExecutorID& executorId,
+      const std::vector<TaskInfo>& tasks,
+      const std::vector<StatusUpdate>& updates);
+
+  void _reregisterExecutor(
+      const process::Future<Nothing>& future,
       const process::UPID& from,
       const FrameworkID& frameworkId,
       const ExecutorID& executorId,
@@ -181,12 +216,20 @@ public:
       const FrameworkID& frameworkId,
       const ExecutorID& executorId,
       const ContainerID& containerId,
+      const TaskInfo& task,
       const process::Future<Nothing>& future);
 
   void executorTerminated(
       const FrameworkID& frameworkId,
       const ExecutorID& executorId,
       const process::Future<Containerizer::Termination>& termination);
+
+  void _executorTerminated(
+      const process::Future<Nothing>& future,
+      const FrameworkID& frameworkId,
+      const ExecutorID& executorId,
+      const process::Future<Containerizer::Termination>& termination,
+      int status);
 
   // NOTE: Pulled these to public to make it visible for testing.
   // TODO(vinod): Make tests friends to this class instead.
@@ -374,10 +417,11 @@ struct Executor
   Executor(
       Slave* slave,
       const FrameworkID& frameworkId,
-      const ExecutorInfo& info,
+      const ExecutorID& executorId,
       const ContainerID& containerId,
       const std::string& directory,
-      bool checkpoint);
+      bool checkpoint,
+      bool commandExecutor);
 
   ~Executor();
 
@@ -404,7 +448,6 @@ struct Executor
   Slave* slave;
 
   const ExecutorID id;
-  const ExecutorInfo info;
 
   const FrameworkID frameworkId;
 
@@ -441,6 +484,15 @@ struct Executor
   // attempts to do some memset's which are unsafe).
   boost::circular_buffer<memory::shared_ptr<Task> > completedTasks;
 
+  // Executor info will be provided by the containerizer and thus not
+  // available up front. Executor info will be ready with launched
+  // promise is satisfied.
+  Option<ExecutorInfo> info;
+
+  // Promise will be satisfied when launch sequence is done and
+  // executor info is ready.
+  process::Promise<Nothing> launched;
+
 private:
   Executor(const Executor&);              // No copying.
   Executor& operator = (const Executor&); // No assigning.
@@ -458,9 +510,8 @@ struct Framework
 
   ~Framework();
 
-  Executor* launchExecutor(
-      const ExecutorInfo& executorInfo,
-      const TaskInfo& taskInfo);
+  Executor* launch(const TaskInfo& task);
+
   void destroyExecutor(const ExecutorID& executorId);
   Executor* getExecutor(const ExecutorID& executorId);
   Executor* getExecutor(const TaskID& taskId);
