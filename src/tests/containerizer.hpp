@@ -64,11 +64,12 @@ public:
 
   virtual ~TestContainerizer();
 
-  MOCK_METHOD7(
+  MOCK_METHOD8(
       launch,
-      process::Future<Nothing>(
+      process::Future<ExecutorInfo>(
           const ContainerID&,
-          const ExecutorInfo&,
+          const TaskInfo& task,
+          const FrameworkID& frameworkId,
           const std::string&,
           const Option<std::string>&,
           const SlaveID&,
@@ -100,9 +101,10 @@ private:
   void setup();
 
   // Default 'launch' implementation.
-  process::Future<Nothing> _launch(
+  process::Future<ExecutorInfo> _launch(
       const ContainerID& containerId,
-      const ExecutorInfo& executorInfo,
+      const TaskInfo& task,
+      const FrameworkID& frameworkId,
       const std::string& directory,
       const Option<std::string>& user,
       const SlaveID& slaveId,

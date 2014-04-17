@@ -73,15 +73,19 @@ TestContainerizer::~TestContainerizer()
 }
 
 
-Future<Nothing> TestContainerizer::_launch(
+Future<ExecutorInfo> TestContainerizer::_launch(
     const ContainerID& containerId,
-    const ExecutorInfo& executorInfo,
+    const TaskInfo& task,
+    const FrameworkID& frameworkId,
     const string& directory,
     const Option<string>& user,
     const SlaveID& slaveId,
     const PID<slave::Slave>& slavePid,
     bool checkpoint)
 {
+  CHECK(task.has_executor());
+  const ExecutorInfo& executorInfo = task.executor();
+
   CHECK(!drivers.contains(containerId))
     << "Failed to launch executor " << executorInfo.executor_id()
     << " of framework " << executorInfo.framework_id()
@@ -137,7 +141,7 @@ Future<Nothing> TestContainerizer::_launch(
       new Promise<slave::Containerizer::Termination>());
   promises[containerId] = promise;
 
-  return Nothing();
+  return executorInfo;
 }
 
 
@@ -203,7 +207,7 @@ void TestContainerizer::setup()
   EXPECT_CALL(*this, update(_, _))
     .WillRepeatedly(Return(Nothing()));
 
-  EXPECT_CALL(*this, launch(_, _, _, _, _, _, _))
+  EXPECT_CALL(*this, launch(_, _, _, _, _, _, _, _))
     .WillRepeatedly(Invoke(this, &TestContainerizer::_launch));
 }
 
