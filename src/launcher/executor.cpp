@@ -61,8 +61,9 @@ using namespace process;
 class CommandExecutorProcess : public Process<CommandExecutorProcess>
 {
 public:
-  CommandExecutorProcess()
-    : launched(false),
+  CommandExecutorProcess(char** argv = NULL)
+    : argv(argv),
+      launched(false),
       killed(false),
       pid(-1),
       escalationTimeout(slave::EXECUTOR_SIGNAL_ESCALATION_TIMEOUT) {}
@@ -100,8 +101,10 @@ public:
       return;
     }
 
-    CHECK(task.has_command()) << "Expecting task " << task.task_id()
-                              << " to have a command!";
+    if (argv == NULL) {
+      CHECK(task.has_command()) << "Expecting task " << task.task_id()
+                                << " to have a command!";
+    }
 
     std::cout << "Starting task " << task.task_id() << std::endl;
 
@@ -168,9 +171,14 @@ public:
       os::close(pipes[1]);
 
       // The child has successfully setsid, now run the command.
-      std::cout << "sh -c '" << task.command().value() << "'" << std::endl;
-      execl("/bin/sh", "sh", "-c",
-            task.command().value().c_str(), (char*) NULL);
+      if (argv != NULL) {
+        std::cout << "Wrapping argument vector..." << std::endl;
+        execvp(argv[0], argv);
+      } else {
+        std::cout << "sh -c '" << task.command().value() << "'" << std::endl;
+        execl("/bin/sh", "sh", "-c",
+              task.command().value().c_str(), (char*) NULL);
+      }
       perror("Failed to exec");
       abort();
     }
@@ -334,6 +342,7 @@ private:
     }
   }
 
+  char** argv;
   bool launched;
   bool killed;
   pid_t pid;
@@ -345,9 +354,9 @@ private:
 class CommandExecutor: public Executor
 {
 public:
-  CommandExecutor()
+  CommandExecutor(char** argv = NULL)
   {
-    process = new CommandExecutorProcess();
+    process = new CommandExecutorProcess(argv);
     spawn(process);
   }
 
@@ -422,7 +431,7 @@ private:
 
 int main(int argc, char** argv)
 {
-  mesos::internal::CommandExecutor executor;
+  mesos::internal::CommandExecutor executor(argc > 1 ? argv+1 : NULL);
   mesos::MesosExecutorDriver driver(&executor);
   return driver.run() == mesos::DRIVER_STOPPED ? 0 : 1;
 }
