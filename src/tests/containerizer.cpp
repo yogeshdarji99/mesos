@@ -22,6 +22,10 @@
 using std::map;
 using std::string;
 
+using testing::_;
+using testing::Invoke;
+using testing::Return;
+
 using namespace process;
 
 namespace mesos {
@@ -69,7 +73,7 @@ TestContainerizer::~TestContainerizer()
 }
 
 
-Future<Nothing> TestContainerizer::launch(
+Future<Nothing> TestContainerizer::_launch(
     const ContainerID& containerId,
     const ExecutorInfo& executorInfo,
     const string& directory,
@@ -140,8 +144,11 @@ Future<Nothing> TestContainerizer::launch(
 Future<slave::Containerizer::Termination> TestContainerizer::wait(
     const ContainerID& containerId)
 {
-  CHECK(promises.contains(containerId))
-    << "Container " << containerId << "not started";
+  // An unknown container is possible for tests where we "drop" the
+  // 'launch' in order to verify recovery still works correctly.
+  if (!promises.contains(containerId)) {
+    return Failure("Unknown container: " + stringify(containerId));
+  }
 
   return promises[containerId]->future();
 }
@@ -182,14 +189,22 @@ void TestContainerizer::destroy(const ContainerID& containerId)
 
 void TestContainerizer::setup()
 {
-  EXPECT_CALL(*this, recover(testing::_))
-    .WillRepeatedly(testing::Return(Nothing()));
+  // NOTE: We use 'EXPECT_CALL' and 'WillRepeatedly' here instead of
+  // ON_CALL and WillByDefault because the former gives the gmock
+  // warning "Uninteresting mock function call" unless each tests puts
+  // the expectations in place which would make the tests much more
+  // verbose.
+  EXPECT_CALL(*this, recover(_))
+    .WillRepeatedly(Return(Nothing()));
 
-  EXPECT_CALL(*this, usage(testing::_))
-    .WillRepeatedly(testing::Return(ResourceStatistics()));
+  EXPECT_CALL(*this, usage(_))
+    .WillRepeatedly(Return(ResourceStatistics()));
 
-  EXPECT_CALL(*this, update(testing::_, testing::_))
-    .WillRepeatedly(testing::Return(Nothing()));
+  EXPECT_CALL(*this, update(_, _))
+    .WillRepeatedly(Return(Nothing()));
+
+  EXPECT_CALL(*this, launch(_, _, _, _, _, _, _))
+    .WillRepeatedly(Invoke(this, &TestContainerizer::_launch));
 }
 
 } // namespace tests {
