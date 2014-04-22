@@ -137,9 +137,25 @@ message CommandInfo {
     optional bool executable = 2;
   }
 
+  // Describes a container.
+  // Not all containerizers currently implement ContainerInfo, so it is
+  // possible that a launched task will fail due to supplying this attribute.
+  // The exact scheme and handling of these attributes is containerizer
+  // specific, make sure you consult its documentation.
+  message ContainerInfo {
+    // Describes the container image name.
+    required string image = 1;
+    // Describes additional options passed to the containerizer.
+    repeated string options = 2;
+  }
+
   repeated URI uris = 1;
   optional Environment environment = 2;
   required string value = 3;
+
+  // NOTE: MesosContainerizer does currently not support this attribute
+  // and tasks supplying a 'container' will fail.
+  optional ContainerInfo container = 4;
 }
 
 
