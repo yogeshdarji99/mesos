@@ -29,14 +29,15 @@ option java_outer_classname = "Protos";
  */
 message Launch {
   required ContainerID container_id = 1;
-  required TaskInfo task = 2;
-  optional FrameworkID framework_id = 3;
-  optional string directory = 4;
-  optional string user = 5;
-  optional SlaveID slave_id = 6;
-  optional string slave_pid = 7;
-  optional bool checkpoint = 8;
-  optional string mesos_executor_path = 9;
+  optional TaskInfo task = 2;
+  optional ExecutorInfo executor = 3;
+  optional FrameworkID framework_id = 4;
+  optional string directory = 5;
+  optional string user = 6;
+  optional SlaveID slave_id = 7;
+  optional string slave_pid = 8;
+  optional bool checkpoint = 9;
+  optional string mesos_executor_path = 10;
 }
 
 
