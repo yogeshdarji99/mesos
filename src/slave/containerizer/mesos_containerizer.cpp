@@ -156,6 +156,7 @@ Future<Nothing> MesosContainerizer::launch(
                   checkpoint);
 }
 
+
 Future<Nothing> MesosContainerizer::update(
     const ContainerID& containerId,
     const Resources& resources)

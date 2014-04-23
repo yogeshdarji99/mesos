@@ -37,16 +37,40 @@ message Launch {
   optional SlaveID slave_id = 7;
   optional string slave_pid = 8;
   optional bool checkpoint = 9;
-  optional string mesos_executor_path = 10;
+  optional string mesos_libexec_directory = 10;
 }
 
 
 /**
- * Information about a containerizer update, sent by slave to the containerizer.
+ * Information about a containerized update, sent by slave to the containerizer.
  */
 message Update {
   required ContainerID container_id = 1;
   repeated Resource resources = 2;
+}
+
+
+/**
+ * Information about a containerized wait, sent by the slave to the containerizer.
+ */
+message Wait {
+  required ContainerID container_id = 1;
+}
+
+
+/**
+ * Information about a containerized destroy, sent by the slave to the containerizer.
+ */
+message Destroy {
+  required ContainerID container_id = 1;
+}
+
+
+/**
+ * Information about a containerized usage, sent by the slave to the containerizer.
+ */
+message Usage {
+  required ContainerID container_id = 1;
 }
 
 

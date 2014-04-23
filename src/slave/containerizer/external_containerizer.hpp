@@ -45,9 +45,9 @@ namespace slave {
 //
 // launch < containerizer::Launch
 // update < containerizer::Update
-// usage < mesos::ContainerID > mesos::ResourceStatistics
-// wait < mesos::ContainerID > containerizer::Termination
-// destroy < mesos::ContainerID
+// usage < containerizer::Usage > mesos::ResourceStatistics
+// wait < containerizer::Wait > containerizer::Termination
+// destroy < containerizer::Destroy
 //
 // 'wait' on the external containerizer side is expected to block
 // until the task command/executor has terminated.
@@ -81,7 +81,7 @@ public:
       const std::string& directory,
       const Option<std::string>& user,
       const SlaveID& slaveId,
-      const process::PID<slave::Slave>& slavePid,
+      const process::PID<Slave>& slavePid,
       bool checkpoint);
 
   virtual process::Future<Nothing> launch(
@@ -91,7 +91,7 @@ public:
       const std::string& directory,
       const Option<std::string>& user,
       const SlaveID& slaveId,
-      const process::PID<slave::Slave>& slavePid,
+      const process::PID<Slave>& slavePid,
       bool checkpoint);
 
   virtual process::Future<Nothing> update(
@@ -105,6 +105,12 @@ public:
       const ContainerID& containerId);
 
   virtual void destroy(const ContainerID& containerId);
+
+  // Get an ExecutorInfo that is specific to a container.
+  static ExecutorInfo containerExecutorInfo(
+      const Flags& flags,
+      const TaskInfo& task,
+      const FrameworkID& frameworkId);
 
 private:
   ExternalContainerizerProcess* process;
@@ -121,20 +127,10 @@ public:
   // containerizer.hpp:recover for more.
   process::Future<Nothing> recover(const Option<state::SlaveState>& state);
 
-  // Start the containerized task.
-  process::Future<Nothing> launch(
-      const ContainerID& containerId,
-      const TaskInfo& task,
-      const ExecutorInfo& executorInfo,
-      const std::string& directory,
-      const Option<std::string>& user,
-      const SlaveID& slaveId,
-      const process::PID<Slave>& slavePid,
-      bool checkpoint);
-
   // Start the containerized executor.
   process::Future<Nothing> launch(
       const ContainerID& containerId,
+      const Option<TaskInfo>& task,
       const ExecutorInfo& executorInfo,
       const std::string& directory,
       const Option<std::string>& user,
@@ -195,14 +191,15 @@ private:
     Resources resources;
   };
 
-  // Stores all launched processes.
+  // Stores all launched containers.
   hashmap<ContainerID, process::Owned<Container> > containers;
 
-  process::Future<Nothing> _launch(
+  void _launch(
       const ContainerID& containerId,
-      const SlaveID& slaveId,
-      bool checkpoint,
       const process::Future<Option<int> >& future);
+
+  process::Future<Nothing> __launch(
+      const ContainerID& containerId);
 
   process::Future<containerizer::Termination> _wait(
       const ContainerID& containerId);
@@ -227,45 +224,6 @@ private:
       const ContainerID& containerId,
       const process::Future<Option<int> >& future);
 
-  // Validate the invocation result.
-  Try<Nothing> isDone(
-      const process::Future<Option<int> >& future);
-
-  // Validate the invocation results and extract a piped protobuf
-  // message.
-  template<typename T>
-  Try<T> result(
-      const process::Future<tuples::tuple<
-          process::Future<Result<T> >,
-          process::Future<Option<int> > > >& future)
-  {
-    if (!future.isReady()) {
-      return Error("Could not receive any result");
-    }
-
-    Try<Nothing> status = isDone(tuples::get<1>(future.get()));
-    if (status.isError()) {
-      return Error(status.error());
-    }
-
-    process::Future<Result<T> > result = tuples::get<0>(future.get());
-    if (result.isFailed()) {
-      return Error("Could not receive any result (error: "
-        + result.failure() + ")");
-    }
-
-    if (result.get().isError()) {
-      return Error("Could not receive any result (error: "
-        + result.get().error() + ")");
-    }
-
-    if (result.get().isNone()) {
-      return Error("Could not receive any result");
-    }
-
-    return result.get().get();
-  }
-
   // Terminate a containerizer process and its children.
   void terminate(const ContainerID& containerId);
 
@@ -280,6 +238,7 @@ private:
       const std::map<std::string, std::string>& environment
         = std::map<std::string, std::string>());
 };
+
 
 } // namespace slave {
 } // namespace internal {

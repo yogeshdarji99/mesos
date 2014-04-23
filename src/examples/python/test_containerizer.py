@@ -36,6 +36,7 @@
 import fcntl
 import multiprocessing
 import os
+import signal
 import subprocess
 import sys
 import struct
@@ -77,10 +78,10 @@ def receive():
 # to stdout.
 def send(data):
     # Write size (uint32 => 4 bytes).
-    os.write(1, struct.pack('I', len(data)))
+    sys.stdout.write(struct.pack('I', len(data)))
 
     # Write payload.
-    os.write(1, data)
+    sys.stdout.write(data)
 
 
 # Start a containerized executor. Expects to receive an Launch
@@ -99,31 +100,42 @@ def launch():
                        "-c",
                        launch.task.executor.command.value]
         else:
-            print >> sys.stderr, "No executor passed; using mesos_executor!"
-            command = [launch.mesos_executor_path,
+            print >> sys.stderr, "No executor passed; using mesos-executor!"
+            executor = os.path.join(launch.mesos_libexec_directory,
+                                    "mesos-executor")
+            command = [executor,
                        "sh",
                        "-c",
                        launch.task.command.value]
+            print >> sys.stderr, "command " + str(command)
 
-            lock_dir = "/tmp/mesos-test-containerizer"
-            subprocess.check_call(["mkdir", "-p", lock_dir])
+        lock_dir = os.path.join("/tmp/mesos-test-containerizer",
+                                launch.container_id.value)
+        subprocess.check_call(["mkdir", "-p", lock_dir])
 
-            lock = os.path.join(lock_dir, launch.container_id.value)
+        # Fork a child process for allowing a blocking wait.
+        pid = os.fork()
+        if pid == 0:
+            # We are in the child.
+            proc = subprocess.Popen(command, env=os.environ.copy())
 
-            # Perform a lock operation on the given path
+            # Wait and serialize the process status when done.
+            lock = os.path.join(lock_dir, "wait")
             with open(lock, "w+") as lk:
                 fcntl.flock(lk, fcntl.LOCK_EX)
 
-                # Fork a child process for allowing a blocking wait.
-                pid = os.fork()
-                if pid == 0:
-                    # We are in the child.
-                    proc = subprocess.Popen(command, env=os.environ.copy())
+                returncode = proc.wait()
 
-                    returncode = proc.wait()
-                    lk.write(str(returncode) + "\n")
+                lk.write(str(returncode) + "\n")
 
-                    sys.exit(returncode)
+            sys.exit(returncode)
+        else:
+            # Serialize the subprocess pid.
+            lock = os.path.join(lock_dir, "pid")
+            with open(lock, "w+") as lk:
+                fcntl.flock(lk, fcntl.LOCK_EX)
+
+                lk.write(str(pid) + "\n")
 
     except google.protobuf.message.DecodeError:
         print >> sys.stderr, "Could not deserialise Launch protobuf"
@@ -141,14 +153,13 @@ def launch():
 
 
 # Update the container's resources.
-# Expects to receive a ResourceArray protobuf via stdin.
+# Expects to receive a Update protobuf via stdin.
 def update():
     try:
         data = receive()
         if len(data) == 0:
             return 1
 
-        time.sleep(2)
         update = containerizer_pb2.Update()
         update.ParseFromString(data)
 
@@ -182,8 +193,8 @@ def usage():
         data = receive()
         if len(data) == 0:
             return 1
-        containerId = mesos_pb2.ContainerID()
-        containerId.ParseFromString(data)
+        usage = containerizer_pb2.Usage()
+        usage.ParseFromString(data)
 
         statistics = mesos_pb2.ResourceStatistics()
 
@@ -220,8 +231,19 @@ def destroy():
         data = receive()
         if len(data) == 0:
             return 1
-        containerId = mesos_pb2.ContainerID()
-        containerId.ParseFromString(data)
+        destroy = containerizer_pb2.Destroy()
+        destroy.ParseFromString(data)
+
+        lock_dir = os.path.join("/tmp/mesos-test-containerizer",
+                                destroy.containerId.value)
+        lock = os.path.join(lock_dir, "pid")
+
+        # Obtain our shared lock once it becomes available, read
+        # the pid and kill that process.
+        with open(lock, "r") as lk:
+            fcntl.flock(lk, fcntl.LOCK_SH)
+            pid = int(lk.read())
+            os.kill(pid, signal.SIGKILL)
 
     except google.protobuf.message.DecodeError:
         print >> sys.stderr, "Could not deserialise ContainerID protobuf."
@@ -265,17 +287,18 @@ def wait():
         data = receive()
         if len(data) == 0:
             return 1
-        containerId = mesos_pb2.ContainerID()
-        containerId.ParseFromString(data)
+        wait = containerizer_pb2.Wait()
+        wait.ParseFromString(data)
 
-        lock_dir = "/tmp/mesos-test-containerizer"
-        lock = os.path.join(lock_dir, containerId.value)
+        lock_dir = os.path.join("/tmp/mesos-test-containerizer",
+                                wait.containerId.value)
+        lock = os.path.join(lock_dir, "wait")
 
         # Obtain our shared lock once it becomes available and read
         # the status code.
         with open(lock, "r") as lk:
             fcntl.flock(lk, fcntl.LOCK_SH)
-        status = int(lk.read())
+            status = int(lk.read())
 
         # Deliver the termination protobuf back to the slave.
         termination = containerizer_pb2.Termination()
