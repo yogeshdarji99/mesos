@@ -61,8 +61,9 @@ using namespace process;
 class ObserverExecutorProcess : public Process<ObserverExecutorProcess>
 {
 public:
-  ObserverExecutorProcess()
-    : launched(false),
+  ObserverExecutorProcess(char** argv = NULL)
+    : argv(argv),
+      launched(false),
       killed(false),
       pid(-1),
       escalationTimeout(slave::EXECUTOR_SIGNAL_ESCALATION_TIMEOUT) {}
@@ -94,16 +95,13 @@ public:
       status.mutable_task_id()->MergeFrom(task.task_id());
       status.set_state(TASK_FAILED);
       status.set_message(
-          "Attempted to run multiple tasks using a \"command\" executor");
+          "Attempted to run multiple tasks using an \"observer\" executor");
 
       driver->sendStatusUpdate(status);
       return;
     }
 
-    CHECK(task.has_command()) << "Expecting task " << task.task_id()
-                              << " to have a command!";
-
-    std::cout << "Starting task " << task.task_id() << std::endl;
+    std::cout << "Observing for task " << task.task_id() << std::endl;
 
     // TODO(benh): Clean this up with the new 'Fork' abstraction.
     // Use pipes to determine which child has successfully changed
@@ -168,11 +166,14 @@ public:
       os::close(pipes[1]);
 
       // The child has successfully setsid, now run the command.
-      std::cout << "sh -c '" << task.command().value() << "'" << std::endl;
-      execl("/bin/sh", "sh", "-c",
-            task.command().value().c_str(), (char*) NULL);
-      perror("Failed to exec");
-      abort();
+      if (argv != NULL) {
+        std::cout << "Wrapping argument vector..." << std::endl;
+        execvp(argv[0], argv);
+        perror("Failed to exec");
+        abort();
+      } else {
+        exit(0);
+      }
     }
 
     // In parent process.
@@ -334,6 +335,7 @@ private:
     }
   }
 
+  char** argv;
   bool launched;
   bool killed;
   pid_t pid;
@@ -345,9 +347,9 @@ private:
 class ObserverExecutor: public Executor
 {
 public:
-  ObserverExecutor()
+  ObserverExecutor(char** argv = NULL)
   {
-    process = new ObserverExecutorProcess();
+    process = new ObserverExecutorProcess(argv);
     spawn(process);
   }
 
@@ -422,7 +424,7 @@ private:
 
 int main(int argc, char** argv)
 {
-  mesos::internal::ObserverExecutor executor;
+  mesos::internal::ObserverExecutor executor(argc > 1 ? argv+1 : NULL);
   mesos::MesosExecutorDriver driver(&executor);
   return driver.run() == mesos::DRIVER_STOPPED ? 0 : 1;
 }
