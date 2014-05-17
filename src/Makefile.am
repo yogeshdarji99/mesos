@@ -1094,6 +1094,7 @@ mesos_tests_SOURCES =				\
   tests/master_contender_detector_tests.cpp	\
   tests/master_tests.cpp			\
   tests/mesos.cpp				\
+  tests/module_tests.cpp			\
   tests/monitor_tests.cpp			\
   tests/paths_tests.cpp				\
   tests/protobuf_io_tests.cpp			\
