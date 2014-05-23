@@ -133,6 +133,14 @@ static Try<T> result(
 }
 
 
+Try<ExternalContainerizer*> ExternalContainerizer::create(
+    const Flags& flags,
+    bool local)
+{
+  return new ExternalContainerizer(flags);
+}
+
+
 ExternalContainerizer::ExternalContainerizer(const Flags& flags)
 {
   process = new ExternalContainerizerProcess(flags);
