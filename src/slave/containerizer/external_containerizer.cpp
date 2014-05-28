@@ -1078,6 +1078,15 @@ static int setup(const string& directory)
 }
 
 
+// Subprocess invocation splice callback for closing the stderr log
+// file fd as well as the stderr pipe fd as soon as we reached an EOF.
+void _invoke(int pipe, int file)
+{
+  os::close(pipe);
+  os::close(file);
+}
+
+
 Try<Subprocess> ExternalContainerizerProcess::invoke(
     const string& command,
     const Option<Sandbox>& sandbox,
@@ -1160,6 +1169,18 @@ Try<Subprocess> ExternalContainerizerProcess::invoke(
         err.error());
   }
 
+  if (sandbox.isSome() && sandbox.get().user.isSome()) {
+    Try<Nothing> chown = os::chown(
+        sandbox.get().user.get(),
+        path::join(sandbox.get().directory, "stderr"));
+    if (chown.isError()) {
+      os::close(err.get());
+      return Error(
+          "Failed to redirect stderr: Failed to chown: " +
+          chown.error());
+    }
+  }
+
   Try<Nothing> cloexec = os::cloexec(err.get());
   if (cloexec.isError()) {
     os::close(err.get());
@@ -1168,19 +1189,18 @@ Try<Subprocess> ExternalContainerizerProcess::invoke(
         cloexec.error());
   }
 
-  if (sandbox.isSome() && sandbox.get().user.isSome()) {
-    Try<Nothing> chown = os::chown(
-        sandbox.get().user.get(),
-        path::join(sandbox.get().directory, "stderr"));
-    if (chown.isError()) {
-      return Error(
-          "Failed to redirect stderr: Failed to chown: " +
-          chown.error());
-    }
+  // Duplicate 'from' so that we're in control of it's lifetime,
+  // exceeding the lifetime of the reaped subprocess. It is needed
+  // to make sure the splicer had a chance to read and process the
+  // EOF.
+  int fd = dup(external.get().err());
+  if (fd == -1) {
+    os::close(err.get());
+    return ErrnoError("Failed to duplicate stderr file descriptor");
   }
 
-  io::splice(external.get().err(), err.get())
-    .onAny(bind(&os::close, err.get()));
+  io::splice(fd, err.get())
+    .onAny(bind(&_invoke, fd, err.get()));
 
   VLOG(2) << "Subprocess pid: " << external.get().pid() << ", "
           << "output pipe: " << external.get().out();
