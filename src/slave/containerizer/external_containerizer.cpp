@@ -1155,7 +1155,17 @@ Try<Subprocess> ExternalContainerizerProcess::invoke(
       O_WRONLY | O_CREAT | O_APPEND | O_NONBLOCK,
       S_IRUSR | S_IWUSR | S_IRGRP | S_IRWXO);
   if (err.isError()) {
-    return Error("Failed to redirect stderr: " + err.error());
+    return Error(
+        "Failed to redirect stderr: Failed to open: " +
+        err.error());
+  }
+
+  Try<Nothing> cloexec = os::cloexec(err.get());
+  if (cloexec.isError()) {
+    os::close(err.get());
+    return Error(
+        "Failed to redirect stderr: Failed to set close-on-exec: " +
+        cloexec.error());
   }
 
   if (sandbox.isSome() && sandbox.get().user.isSome()) {
@@ -1163,7 +1173,9 @@ Try<Subprocess> ExternalContainerizerProcess::invoke(
         sandbox.get().user.get(),
         path::join(sandbox.get().directory, "stderr"));
     if (chown.isError()) {
-      return Error("Failed to redirect stderr:" + chown.error());
+      return Error(
+          "Failed to redirect stderr: Failed to chown: " +
+          chown.error());
     }
   }
 
