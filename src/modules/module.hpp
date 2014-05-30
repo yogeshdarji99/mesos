@@ -25,8 +25,6 @@
 #include <stout/lambda.hpp>
 #include <stout/memory.hpp>
 
-// module::instantiate<>(library, symbol, <arg>)
-
 namespace module {
 
 template <typename T>
@@ -35,8 +33,6 @@ Try<memory::shared_ptr<T> > init(
     const std::string& entrySymbol,
     void* optionalArguments = NULL)
 {
-  lambda::function<memory::shared_ptr<T>(void*)> entryFunction;
-
   Try<void*> symbol = library.loadSymbol(entrySymbol);
   if (symbol.isError()) {
     return Error(symbol.error());
@@ -46,11 +42,11 @@ Try<memory::shared_ptr<T> > init(
     return Error("Symbol should not be NULL pointer");
   }
 
-  entryFunction =
-    lambda::bind(
-        reinterpret_cast<memory::shared_ptr<T>(*)(void*)>(symbol.get()),
-        lambda::_1);
-  return entryFunction(optionalArguments);
+  printf("symbol: %p\n", symbol.get());
+
+
+
+  return memory::shared_ptr<T>(entryFunction(optionalArguments));
 }
 
 }
