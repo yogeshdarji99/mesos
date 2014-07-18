@@ -32,7 +32,14 @@ TEST_F(ModulesTest, LoadModuleTest)
 {
   DynamicLibrary library;
   Try<Nothing> result = library.open(
-      path::join(tests::flags.build_dir, "src", ".libs", "libtest.dylib"));
+      path::join(
+          tests::flags.build_dir, "src", ".libs",
+#ifdef __linux__
+          "libtest.so"
+#else
+          "libtest.dylib"
+#endif
+          ));
   ASSERT_SOME(result);
 
   Try<memory::shared_ptr<TestLibrary> > module =
