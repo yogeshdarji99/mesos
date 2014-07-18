@@ -42,11 +42,13 @@ Try<memory::shared_ptr<T> > init(
     return Error("Symbol should not be NULL pointer");
   }
 
-  printf("symbol: %p\n", symbol.get());
+  void* (*entryFunction)(void*) = (void *(*)(void*))symbol.get();
+  void* moduleData = entryFunction(optionalArguments);
 
+  // TODO(nnielsen): dynamic_cast does not work on void pointers.
+  T* module = (T*)(moduleData);
 
-
-  return memory::shared_ptr<T>(entryFunction(optionalArguments));
+  return memory::shared_ptr<T>(module);
 }
 
 }
