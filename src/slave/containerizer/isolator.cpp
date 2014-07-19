@@ -39,6 +39,10 @@ Isolator::Isolator(Owned<IsolatorProcess> _process)
 
 Isolator::~Isolator()
 {
+  // TODO(nnielsen): Temporary hack, until module provide isolator process.
+  if (process.get() == NULL) {
+    return;
+  }
   process::terminate(process.get());
   process::wait(process.get());
 }

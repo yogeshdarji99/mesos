@@ -16,7 +16,10 @@
  * limitations under the License.
  */
 
+#include <slave/containerizer/isolator.hpp>
+
 #include "modules/module.hpp"
+#include "modules/isolator_module.hpp"
 #include "module.hpp"
 
 #include "tests/flags.hpp"
@@ -48,4 +51,23 @@ TEST_F(ModulesTest, LoadModuleTest)
 
   EXPECT_EQ(module.get()->foo('a', 1024), 0xabab);
   EXPECT_EQ(module.get()->bar(0.5, 0.75), 0xf0f0);
+}
+
+TEST_F(ModulesTest, IsolatorModuleTest)
+{
+  DynamicLibrary library;
+  Try<Nothing> result = library.open(
+      path::join(
+          tests::flags.build_dir, "src", ".libs",
+#ifdef __linux__
+          "libtest.so"
+#else
+          "libtest.dylib"
+#endif
+          ));
+  ASSERT_SOME(result);
+
+  Try<memory::shared_ptr<mesos::internal::slave::IsolatorModule> > module =
+    mesos::internal::slave::IsolatorModule::init(library);
+  ASSERT_SOME(module);
 }

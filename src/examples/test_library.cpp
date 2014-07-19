@@ -16,7 +16,21 @@
  * limitations under the License.
  */
 
+#include <list>
+#include <string>
+
+#include <process/dispatch.hpp>
+#include <process/future.hpp>
+#include <process/owned.hpp>
+#include <process/process.hpp>
+
+#include <stout/try.hpp>
+
 #include <tests/module.hpp>
+
+#include <modules/isolator_module.hpp>
+
+#include <slave/containerizer/isolator.hpp>
 
 class TestLibraryImpl : public TestLibrary
 {
@@ -32,9 +46,74 @@ public:
   }
 };
 
+using namespace process;
+
+namespace mesos {
+namespace internal {
+namespace slave {
+
+class TestIsolatorImpl : public IsolatorModule
+{
+public:
+  TestIsolatorImpl() : IsolatorModule()
+  {
+  }
+  
+  virtual process::Future<Nothing> recover(
+      const std::list<state::RunState>& state) {
+    return Nothing();
+  }
+
+  virtual process::Future<Option<CommandInfo> > prepare(
+      const ContainerID& containerId,
+      const ExecutorInfo& executorInfo)
+  {
+    return None();
+  }
+
+  virtual process::Future<Nothing> isolate(
+      const ContainerID& containerId,
+      pid_t pid)
+  {
+    return Nothing();
+  }
+
+  virtual process::Future<Limitation> watch(
+      const ContainerID& containerId)
+  {
+    return Limitation(Resource(), "");
+  }
+
+  virtual process::Future<Nothing> update(
+      const ContainerID& containerId,
+      const Resources& resources)
+  {
+    return Nothing();
+  }
+
+  virtual process::Future<ResourceStatistics> usage(
+      const ContainerID& containerId)
+  {
+    return ResourceStatistics();
+  }
+
+  virtual process::Future<Nothing> cleanup(const ContainerID& containerId)
+  {
+    return Nothing();
+  }
+};
+
+} // namespace slave {
+} // namespace internal {
+} // namespace mesos {
+
 extern "C" {
-void* create() {
+void* create(void* args) {
   return new TestLibraryImpl;
+}
+
+void* create_isolator(void *args) {
+  return new mesos::internal::slave::TestIsolatorImpl;
 }
 };
 
