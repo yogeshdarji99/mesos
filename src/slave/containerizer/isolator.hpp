@@ -101,9 +101,6 @@ public:
   // processes in the container have terminated.
   process::Future<Nothing> cleanup(const ContainerID& containerId);
 
-  // TODO(nnielsen): Hack for now.
-  Isolator() {}
-
 private:
   Isolator(const Isolator&); // Not copyable.
   Isolator& operator=(const Isolator&); // Not assignable.

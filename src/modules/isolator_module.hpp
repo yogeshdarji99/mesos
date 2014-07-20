@@ -35,7 +35,9 @@ namespace slave {
 
 class IsolatorModule : public Module, Isolator {
 public:
-  IsolatorModule() : Module(), Isolator() {}
+  IsolatorModule(process::Owned<IsolatorProcess> process)
+    : Module(),
+      Isolator(process) {}
 
   static Try<memory::shared_ptr<IsolatorModule> > init(DynamicLibrary& library)
   {

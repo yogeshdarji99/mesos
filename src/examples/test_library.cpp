@@ -55,10 +55,58 @@ namespace slave {
 class TestIsolatorImpl : public IsolatorModule
 {
 public:
-  TestIsolatorImpl() : IsolatorModule()
+  TestIsolatorImpl(process::Owned<IsolatorProcess> process)
+    : IsolatorModule(process)
   {
   }
   
+  virtual process::Future<Nothing> recover(
+      const std::list<state::RunState>& state) {
+    return Nothing();
+  }
+
+  virtual process::Future<Option<CommandInfo> > prepare(
+      const ContainerID& containerId,
+      const ExecutorInfo& executorInfo)
+  {
+    return None();
+  }
+
+  virtual process::Future<Nothing> isolate(
+      const ContainerID& containerId,
+      pid_t pid)
+  {
+    return Nothing();
+  }
+
+  virtual process::Future<Limitation> watch(
+      const ContainerID& containerId)
+  {
+    return Limitation(Resource(), "");
+  }
+
+  virtual process::Future<Nothing> update(
+      const ContainerID& containerId,
+      const Resources& resources)
+  {
+    return Nothing();
+  }
+
+  virtual process::Future<ResourceStatistics> usage(
+      const ContainerID& containerId)
+  {
+    return ResourceStatistics();
+  }
+
+  virtual process::Future<Nothing> cleanup(const ContainerID& containerId)
+  {
+    return Nothing();
+  }
+};
+
+class TestIsolatorProcess : public IsolatorProcess
+{
+public:
   virtual process::Future<Nothing> recover(
       const std::list<state::RunState>& state) {
     return Nothing();
@@ -113,7 +161,9 @@ void* create(void* args) {
 }
 
 void* create_isolator(void *args) {
-  return new mesos::internal::slave::TestIsolatorImpl;
+  process::Owned<mesos::internal::slave::IsolatorProcess> process(
+      new mesos::internal::slave::TestIsolatorProcess);
+  return new mesos::internal::slave::TestIsolatorImpl(process);
 }
 };
 
