@@ -27,7 +27,7 @@ public:
   }
 
   int bar(float a, double b)
-  { 
+  {
     return 0xf0f0;
   }
 };

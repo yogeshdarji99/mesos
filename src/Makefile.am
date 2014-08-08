@@ -1134,7 +1134,7 @@ mesos_tests_CPPFLAGS += -DBUILD_DIR=\"$(abs_top_builddir)\"
 mesos_tests_CPPFLAGS += -I../$(GTEST)/include
 mesos_tests_CPPFLAGS += -I../$(GMOCK)/include
 
-mesos_tests_LDADD = ../$(LIBPROCESS)/3rdparty/libgmock.la libmesos.la
+mesos_tests_LDADD = ../$(LIBPROCESS)/3rdparty/libgmock.la libmesos.la -ldl
 
 mesos_tests_DEPENDENCIES = # Initialized to allow += below.
 

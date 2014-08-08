@@ -45,6 +45,8 @@ public:
     : IsolatorModule(process)
   {
   }
+
+  virtual ~TestIsolatorImpl() {}
   
   virtual process::Future<Nothing> recover(
       const std::list<state::RunState>& state) {
@@ -93,6 +95,8 @@ public:
 class TestIsolatorProcess : public IsolatorProcess
 {
 public:
+  virtual ~TestIsolatorProcess() {}
+
   virtual process::Future<Nothing> recover(
       const std::list<state::RunState>& state) {
     return Nothing();
@@ -142,7 +146,7 @@ public:
 } // namespace mesos {
 
 extern "C" {
-void* create_isolator(void *args) {
+void* create_isolator_module(void *args) {
   process::Owned<mesos::internal::slave::IsolatorProcess> process(
       new mesos::internal::slave::TestIsolatorProcess);
   return new mesos::internal::slave::TestIsolatorImpl(process);

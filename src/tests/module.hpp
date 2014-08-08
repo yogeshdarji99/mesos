@@ -33,7 +33,7 @@ public:
 
   static Try<memory::shared_ptr<TestModule> > init(DynamicLibrary& library)
   {
-    return module::init<TestModule>(library, "create");
+    return module::init<TestModule>(library, "create_test_module");
   }
 
   virtual int foo(char a, long b) = 0;
