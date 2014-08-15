@@ -25,6 +25,8 @@
 #include <stout/lambda.hpp>
 #include <stout/memory.hpp>
 
+#include <mesos/mesos.hpp>
+
 namespace module {
 
 template <typename T>
@@ -53,16 +55,30 @@ Try<memory::shared_ptr<T> > init(
 
 }
 
+// The module class works as a wrapper "around" the external implementation
+// (brought in the dynamic loaded library).
+// 
 class Module : public boost::noncopyable {
 public:
-  Module(int version = 1) : version_(version) { }
-
   virtual ~Module() { }
 
-  virtual int version() { return version_; }
-
 protected:
-  int version_;
+  const std::string mesosVersion_;
+  int APIVersion_;
+
+  enum ModuleIdentifier {
+    UNKNOWN_MODULE = 0,
+    ISOLATOR_MODULE = 1
+  } moduleIdentifier_;
+
+  Module(
+      ModuleIdentifier id,
+      int version = 1,
+      const std::string mesosVersion = MESOS_VERSION)
+    : mesosVersion_(MESOS_VERSION),
+      APIVersion_(version),
+      moduleIdentifier_(id) { }
+
 };
 
 #endif // __MODULE_HPP__

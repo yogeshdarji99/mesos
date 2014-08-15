@@ -1067,9 +1067,14 @@ load_generator_framework_LDADD = libmesos.la
 check_PROGRAMS += mesos-tests
 
 lib_LTLIBRARIES += libtest.la
-libtest_la_SOURCES = examples/test_library.cpp
+libtest_la_SOURCES = examples/test_module.cpp
 libtest_la_CPPFLAGS = $(MESOS_CPPFLAGS)
 libtest_la_LDFLAGS = -release $(PACKAGE_VERSION) -shared
+
+lib_LTLIBRARIES += libtestisolator.la
+libtestisolator_la_SOURCES = examples/test_isolator_module.cpp
+libtestisolator_la_CPPFLAGS = $(MESOS_CPPFLAGS)
+libtestisolator_la_LDFLAGS = -release $(PACKAGE_VERSION) -shared
 
 mesos_tests_SOURCES =				\
   tests/allocator_tests.cpp			\

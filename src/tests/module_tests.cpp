@@ -45,8 +45,8 @@ TEST_F(ModulesTest, LoadModuleTest)
           ));
   ASSERT_SOME(result);
 
-  Try<memory::shared_ptr<TestLibrary> > module =
-    TestLibrary::init(library);
+  Try<memory::shared_ptr<TestModule> > module =
+    TestModule::init(library);
   ASSERT_SOME(module);
 
   EXPECT_EQ(module.get()->foo('a', 1024), 0xabab);
@@ -60,14 +60,17 @@ TEST_F(ModulesTest, IsolatorModuleTest)
       path::join(
           tests::flags.build_dir, "src", ".libs",
 #ifdef __linux__
-          "libtest.so"
+          "libtestisolator.so"
 #else
-          "libtest.dylib"
+          "libtestisolator.dylib"
 #endif
           ));
   ASSERT_SOME(result);
 
-  Try<memory::shared_ptr<mesos::internal::slave::IsolatorModule> > module =
+  Try<memory::shared_ptr<mesos::internal::slave::Isolator> > module =
     mesos::internal::slave::IsolatorModule::init(library);
   ASSERT_SOME(module);
 }
+
+// TODO(nnielsen): Negative-test of module load of modules with
+// in-correct type, API version, etc.
