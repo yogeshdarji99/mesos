@@ -36,12 +36,22 @@ namespace slave {
 class IsolatorModule : public Module, Isolator {
 public:
   IsolatorModule(process::Owned<IsolatorProcess> process)
-    : Module(Module::ISOLATOR_MODULE, 1),
+    : Module(Module::ISOLATOR_MODULE),
       Isolator(process) {}
 
   static Try<memory::shared_ptr<Isolator> > init(DynamicLibrary& library)
   {
-    return module::init<IsolatorModule>(library, "create_isolator_module");
+    Try<memory::shared_ptr<IsolatorModule> > module =
+      module::init<IsolatorModule>(library, "create_isolator_module");
+
+    if (module.isError()) {
+      return Error(module.error());
+    }
+
+    memory::shared_ptr<IsolatorModule> modulePointer = module.get();
+    Isolator* is = modulePointer.get();
+    memory::shared_ptr<Isolator> ret(is);
+    return ret;
   }
 };
 

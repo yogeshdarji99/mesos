@@ -57,26 +57,28 @@ Try<memory::shared_ptr<T> > init(
 
 // The module class works as a wrapper "around" the external implementation
 // (brought in the dynamic loaded library).
-// 
 class Module : public boost::noncopyable {
 public:
   virtual ~Module() { }
 
 protected:
   const std::string mesosVersion_;
-  int APIVersion_;
+  int moduleSystemVersion_;
+  int moduleVersion_;
 
   enum ModuleIdentifier {
     UNKNOWN_MODULE = 0,
-    ISOLATOR_MODULE = 1
+    TEST_MODULE = 1,
+    ISOLATOR_MODULE = 2
   } moduleIdentifier_;
 
   Module(
       ModuleIdentifier id,
-      int version = 1,
+      int moduleVersion = 1,
+      int moduleSystemVersion = 1,
       const std::string mesosVersion = MESOS_VERSION)
     : mesosVersion_(MESOS_VERSION),
-      APIVersion_(version),
+      moduleSystemVersion_(moduleSystemVersion),
       moduleIdentifier_(id) { }
 
 };
