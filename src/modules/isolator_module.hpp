@@ -33,7 +33,7 @@ namespace mesos {
 namespace internal {
 namespace slave {
 
-class IsolatorModule : public Module, Isolator {
+class IsolatorModule : public Module, public Isolator {
 public:
   IsolatorModule(process::Owned<IsolatorProcess> process)
     : Module(Module::ISOLATOR_MODULE),
@@ -48,10 +48,7 @@ public:
       return Error(module.error());
     }
 
-    memory::shared_ptr<IsolatorModule> modulePointer = module.get();
-    Isolator* is = modulePointer.get();
-    memory::shared_ptr<Isolator> ret(is);
-    return ret;
+    return std::dynamic_pointer_cast<Isolator>(module.get());
   }
 };
 
