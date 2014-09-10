@@ -27,6 +27,59 @@
 
 #include <mesos/mesos.hpp>
 
+namespace mesos {
+
+#define MODULE_API_VERSION "1"
+
+#define MODULE_API_VERSION_FUNCTION moduleApiVersion
+
+#define DEFINE_API_VERSION() \
+  std::string MODULE_API_VERSION_FUNCTION() { return MODULE_API_VERSION; }
+
+class ModuleInfo
+{
+public:
+  int version;
+
+};
+
+
+/**
+ * Mesos module loading.
+ * Phases:
+ * 1. Load dynamic libraries that contain modules.
+ * 2. Verify versions and compatibilities.
+ *   a) Library compatibility.
+ *   b) Module compatibility.
+ * 3. Instantiate singleton per module.
+ * 4. Bind reference to use case.
+ */
+class ModuleManager {
+public:
+  ModuleManager() : version(1)
+  {
+
+  }
+
+  /**
+   * Phase 1 and 2.
+   */
+  Try<Nothing> parseFlag(std::string flagValue);
+
+  const int version;
+private:
+  // Phase 1.
+  Try<DynamicLibrary&> loadLibrary(std::string path);
+
+  // Used for phase 2b.
+  Try<ModuleInfo> getModuleInfo(DynamicLibrary& lib, std::string moduleName);
+
+  hashmap<std::string, Module> modules;
+};
+
+
+} // namespace mesos {
+
 namespace module {
 
 template <typename T>
@@ -57,7 +110,8 @@ Try<memory::shared_ptr<T> > init(
 
 // The module class works as a wrapper "around" the external implementation
 // (brought in the dynamic loaded library).
-class Module : public boost::noncopyable {
+class Module : public boost::noncopyable
+{
 public:
   virtual ~Module() { }
 
