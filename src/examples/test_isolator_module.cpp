@@ -28,8 +28,6 @@
 
 #include <tests/module.hpp>
 
-#include <module/isolator_module.hpp>
-
 #include <slave/containerizer/isolator.hpp>
 
 using namespace process;
@@ -37,60 +35,6 @@ using namespace process;
 namespace mesos {
 namespace internal {
 namespace slave {
-
-class TestIsolatorImpl : public IsolatorModule
-{
-public:
-  TestIsolatorImpl(process::Owned<IsolatorProcess> process)
-    : IsolatorModule(process)
-  {
-  }
-
-  virtual ~TestIsolatorImpl() {}
-
-  virtual process::Future<Nothing> recover(
-      const std::list<state::RunState>& state) {
-    return Nothing();
-  }
-
-  virtual process::Future<Option<CommandInfo> > prepare(
-      const ContainerID& containerId,
-      const ExecutorInfo& executorInfo)
-  {
-    return None();
-  }
-
-  virtual process::Future<Nothing> isolate(
-      const ContainerID& containerId,
-      pid_t pid)
-  {
-    return Nothing();
-  }
-
-  virtual process::Future<Limitation> watch(
-      const ContainerID& containerId)
-  {
-    return Limitation(Resource(), "");
-  }
-
-  virtual process::Future<Nothing> update(
-      const ContainerID& containerId,
-      const Resources& resources)
-  {
-    return Nothing();
-  }
-
-  virtual process::Future<ResourceStatistics> usage(
-      const ContainerID& containerId)
-  {
-    return ResourceStatistics();
-  }
-
-  virtual process::Future<Nothing> cleanup(const ContainerID& containerId)
-  {
-    return Nothing();
-  }
-};
 
 class TestIsolatorProcess : public IsolatorProcess
 {

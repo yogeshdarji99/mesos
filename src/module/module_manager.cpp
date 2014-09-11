@@ -20,10 +20,9 @@
 #include <vector>
 
 #include <stout/hashmap.hpp>
+#include <stout/strings.hpp>
 #include <stout/numify.hpp>
 #include <process/check.hpp>
-
-#include "strings.hpp"
 
 #include "module/module.hpp"
 #include "module/module_manager.hpp"
@@ -124,13 +123,13 @@ Try<Nothing> ModuleManager::loadLibraries(string modulePaths)
       if (lib.isError()) {
         return Error(lib.error());
       }
-      for (size_t i = 1; i < tokens.size()) {
+      for (size_t i = 1; i < tokens.size(); i++) {
         string module = tokens[i];
         Try<Nothing> result = verifyModuleRole(lib.get(), module);
         if (result.isError()) {
           return Error(result.error());
         }
-        moduleToDynLib[module] = lib.get();
+        moduleToDynamicLibrary[module] = lib.get();
       }
     }
   }

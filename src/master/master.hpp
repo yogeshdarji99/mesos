@@ -59,6 +59,8 @@
 
 #include "messages/messages.hpp"
 
+#include "module/module_manager.hpp"
+
 namespace process {
 class RateLimiter; // Forward declaration.
 }
@@ -475,6 +477,8 @@ private:
   MasterDetector* detector;
 
   const Option<Authorizer*> authorizer;
+
+  ModuleManager moduleManager;
 
   MasterInfo info_;
 

@@ -50,7 +50,7 @@ public:
 
 private:
   Try<DynamicLibrary*> loadModuleLibrary(std::string path);
-  Try<Nothing> verifyModuleRole(std::string module, DynamicLibrary *lib);
+  Try<Nothing> verifyModuleRole(DynamicLibrary *lib, std::string module);
 
   hashmap<std::string, DynamicLibrary*> moduleToDynamicLibrary;
   hashmap<std::string, std::string> roleToVersion;

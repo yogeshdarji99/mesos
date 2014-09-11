@@ -69,6 +69,8 @@
 #include "master/flags.hpp"
 #include "master/master.hpp"
 
+#include "module/module_manager.hpp"
+
 using std::list;
 using std::string;
 using std::vector;

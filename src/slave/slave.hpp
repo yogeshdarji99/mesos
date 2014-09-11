@@ -393,7 +393,7 @@ private:
 
   Containerizer* containerizer;
 
-  ModuleManager* moduleManager;
+  ModuleManager moduleManager;
 
   Files* files;
 
