@@ -31,6 +31,30 @@ using namespace mesos::internal::tests;
 
 class ModulesTest : public MesosTest {};
 
+
+TEST_F(ModulesTest, LoadModuleTest)
+{
+  ModuleManager manager;
+  Try<Nothing> result = manager.loadLibraries(
+      path::join(
+          tests::flags.build_dir, "src", ".libs",
+#ifdef __linux__
+          "libtest.so"
+#else
+          "libtest.dylib"
+#endif
+          ) + ":TestModule");
+  ASSERT_SOME(result);
+
+  Try<memory::shared_ptr<TestModule> > module =
+    manager.createTestModule();
+  ASSERT_SOME(module);
+
+  EXPECT_EQ(module.get()->foo('a', 1024), 0xabab);
+  EXPECT_EQ(module.get()->bar(0.5, 0.75), 0xf0f0);
+}
+
+
 TEST_F(ModulesTest, LoadModuleTest)
 {
   DynamicLibrary library;

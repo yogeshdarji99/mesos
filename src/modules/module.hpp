@@ -29,6 +29,8 @@
 
 namespace mesos {
 
+// Module implementation utilities:
+
 #define MODULE_API_VERSION "1"
 
 #define MESOS_VERSION_FUNCTION mesosVersion
@@ -41,6 +43,11 @@ namespace mesos {
 #define DEFINE_MODULE(role, name) \
   std::string get##name##Role() { return #role; } \
   role create##name##Instance()
+
+// Called by Mesos:
+
+#define CREATE_MODULE(role, name) \
+
 
 class ModuleInfo
 {
