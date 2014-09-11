@@ -17,13 +17,18 @@
  */
 
 #include <string>
+#include <vector>
+
 #include <stout/hashmap.hpp>
 #include <stout/numify.hpp>
+
+#include "strings.hpp"
 
 #include "modules/module.hpp"
 #include "modules/module_manager.hpp"
 
 using std::string;
+using std::vector;
 
 namespace mesos {
 
@@ -37,7 +42,7 @@ ModuleManager::ModuleManager()
 {
   roleToVersion["TestModule"]    = "0.22";
   roleToVersion["Isolator"]      = "0.22";
-  roleToVersion["Authenticator"] = "0.28";
+  roleToVersion["Authenticator"] = "0.22";
   roleToVersion["Allocator"]     = "0.22";
 
 // mesos           library      result
@@ -69,7 +74,7 @@ Try<DynamicLibrary*> ModuleManager::loadModuleLibrary(string path)
   Try<string> apiVersion =
     callFunction<string>(lib, MODULE_API_VERSION_FUNCTION_STRING);
   if (apiVersion.isError()) {
-    return Error(apiVersion.error());
+    return Error(apiVersion.error();
   }
   if (apiVersion != MODULE_API_VERSION) {
     return Error("Module API version mismatch. " +
@@ -79,7 +84,7 @@ Try<DynamicLibrary*> ModuleManager::loadModuleLibrary(string path)
   return lib;
 }
 
-Try<Nothing> ModuleManager::verifyModuleRole(string module, DynamicLibrary *lib)
+Try<Nothing> ModuleManager::verifyModuleRole(DynamicLibrary *lib, string module)
 {
   Try<string> role = callFunction<string>(lib, "get" + module + "Role");
   if (role.isError()) {
@@ -108,18 +113,23 @@ Try<Nothing> ModuleManager::verifyModuleRole(string module, DynamicLibrary *lib)
 
 Try<Nothing> ModuleManager::loadLibraries(string modulePaths)
 {
-  // load all libs
-  // check their MMS version
-  // if problem, bail
-  foreach (path, paths) {
-    Try<DynamicLibrary*> lib = loadModuleLibrary(path);
-    if (lib.isError()) {
-      return Error(lib.error());
-    }
-
-    foreach (module, modules) {
-      verifyModuleRole(lib.get(), module);
-      moduleToDynLib[module] = lib.get();
+  vector<string> entries = strings::split(modulePaths, ",");
+  foreach (string entry, entries) {
+    vector<string> tokens = strings::split(entry, ":");
+    if (tokens.size() > 1) {
+      string path = tokens[0];
+      Try<DynamicLibrary*> lib = loadModuleLibrary(path);
+      if (lib.isError()) {
+        return Error(lib.error());
+      }
+      for (size_t i = 1; i < tokens.size()) {
+        string module = tokens[i];
+        Try<Nothing> result = verifyModuleRole(lib.get(), module);
+        if (result.isError()) {
+          return Error(result.error());
+        }
+        moduleToDynLib[module] = lib.get();
+      }
     }
   }
   return Nothing();
