@@ -44,10 +44,6 @@ namespace mesos {
   std::string get##name##Role() { return #role; } \
   role create##name##Instance()
 
-// Called by Mesos:
-
-#define CREATE_MODULE(role, name) \
-
 
 class ModuleInfo
 {

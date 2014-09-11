@@ -49,6 +49,8 @@ public:
    */
   Try<Nothing> loadLibraries(std::string modulePath);
 
+  Try<Isolator> createIsolator(std::string moduleName);
+
 private:
   hashmap<std::string, DynamicLibrary*> moduleToDynLib;
   hashmap<std::string, std::string> roleToVersion;
