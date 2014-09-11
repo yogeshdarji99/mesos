@@ -47,6 +47,8 @@
 #include "slave/containerizer/mesos/containerizer.hpp"
 #include "slave/containerizer/mesos/launch.hpp"
 
+#include "modules/module_manager.hpp"
+
 using std::list;
 using std::map;
 using std::string;
@@ -113,8 +115,8 @@ Try<MesosContainerizer*> MesosContainerizer::create(
       } else {
         isolators.push_back(Owned<Isolator>(isolator.get()));
       }
-    } else if (moduleManager.createIsolator(type)) {
-      Try<Isolator*> isolator = moduleManager.create(type);
+    } else if (moduleManager.contains(type)) {
+      Try<Isolator*> isolator = moduleManager.loadModule<Isolator>(type);
       if (isolator.isError()) {
         return Error(
             "Could not create isolator " + type + ": " + isolator.error());

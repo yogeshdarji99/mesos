@@ -44,11 +44,15 @@ public:
   Try<Nothing> loadLibraries(std::string modulePath);
   template<typename Role> Try<Role*> loadModule(std::string moduleName);
 
+  bool containsModule(std::string moduleName) const {
+    return moduleToDynamicLibrary.contains(moduleName);
+  }
+
 private:
   Try<DynamicLibrary*> loadModuleLibrary(std::string path);
   Try<Nothing> verifyModuleRole(std::string module, DynamicLibrary *lib);
 
-  hashmap<std::string, DynamicLibrary*> moduleToDynLib;
+  hashmap<std::string, DynamicLibrary*> moduleToDynamicLibrary;
   hashmap<std::string, std::string> roleToVersion;
 };
 

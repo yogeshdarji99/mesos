@@ -21,6 +21,7 @@
 
 #include <stout/hashmap.hpp>
 #include <stout/numify.hpp>
+#include <process/check.hpp>
 
 #include "strings.hpp"
 
@@ -32,11 +33,12 @@ using std::vector;
 
 namespace mesos {
 
+#define STRINGIFY(x) #x
 #define MODULE_API_VERSION_FUNCTION_STRING \
-  #MODULE_API_VERSION_FUNCTION
+  STRINGIFY(MODULE_API_VERSION_FUNCTION)
 
 #define MESOS_VERSION_FUNCTION_STRING \
-  #MESOS_VERSION_FUNCTION
+  STRINGIFY(MESOS_VERSION_FUNCTION)
 
 ModuleManager::ModuleManager()
 {
@@ -59,7 +61,7 @@ static Try<T> callFunction(DynamicLibrary *lib, string functionName)
   if (symbol.isError()) {
     return Error(symbol.error());
   }
-  T (*v)() = (T (*)()) symbol;
+  T (*v)() = (T (*)()) symbol.get();
   return (*v)();
 }
 
@@ -74,12 +76,12 @@ Try<DynamicLibrary*> ModuleManager::loadModuleLibrary(string path)
   Try<string> apiVersion =
     callFunction<string>(lib, MODULE_API_VERSION_FUNCTION_STRING);
   if (apiVersion.isError()) {
-    return Error(apiVersion.error();
+    return Error(apiVersion.error());
   }
-  if (apiVersion != MODULE_API_VERSION) {
-    return Error("Module API version mismatch. " +
-                 "Mesos has: " + MODULE_API_VERSION +
-                 "library requires: " + apiVersion);
+  if (apiVersion.get() != MODULE_API_VERSION) {
+    return Error("Module API version mismatch. "
+                 "Mesos has: " MODULE_API_VERSION
+                 "library requires: " + apiVersion.get());
   }
   return lib;
 }
@@ -100,8 +102,8 @@ Try<Nothing> ModuleManager::verifyModuleRole(DynamicLibrary *lib, string module)
     return Error(libraryMesosVersion.error());
   }
 
-  if (numify<double>(libraryMesosVersion.get()) >=
-      numify<double>(roleToVersion[role.get()])) {
+  if (numify<double>(libraryMesosVersion.get()).get() >=
+      numify<double>(roleToVersion[role.get()]).get()) {
     return Error("Role version mismatch: " + role.get() +
                  " supported by Mesos with version >=" +
                  roleToVersion[role.get()] +
@@ -136,10 +138,10 @@ Try<Nothing> ModuleManager::loadLibraries(string modulePaths)
 }
 
 template<typename Role>
-Try<Role*> loadModule(std::string moduleName)
+Try<Role*> ModuleManager::loadModule(std::string moduleName)
 {
   Option<DynamicLibrary*> lib = moduleToDynamicLibrary[moduleName];
-  ASSERT_SOME(lib);
+  CHECK_SOME(lib);
 
   Try<Role*> instance =
       callFunction<Role*>(lib.get(), "create" + moduleName + "Instance");
