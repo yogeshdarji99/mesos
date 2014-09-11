@@ -39,20 +39,6 @@ namespace mesos {
   std::string get##name##Role() { return #role; } \
   role create##name##Instance()
 
-
-// class ModuleInfo
-// {
-// public:
-//   ModuleRole role;
-// 
-//   // For dependency resolution only.
-//   int version;
-//   vector<std::string> depends;
-//   vector<std::string> provides;
-//   vector<std::string> conflicts;
-// 
-// };
-
 } // namespace mesos {
 
 #endif // __MODULE_HPP__

@@ -41,11 +41,7 @@ class ModuleManager {
 public:
   ModuleManager();
 
-  /**
-   * Phase 1 and 2.
-   */
   Try<Nothing> loadLibraries(std::string modulePath);
-  //Try<Isolator> loadIsolatorModule(std::string moduleName);
   template<typename Role> Try<Role*> loadModule(std::string moduleName);
 
 private:
@@ -54,7 +50,6 @@ private:
 
   hashmap<std::string, DynamicLibrary*> moduleToDynLib;
   hashmap<std::string, std::string> roleToVersion;
-
 };
 
 

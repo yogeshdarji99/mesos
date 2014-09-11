@@ -18,6 +18,7 @@
 
 #include <string>
 #include <stout/hashmap.hpp>
+#include <stout/numify.hpp>
 
 #include "modules/module.hpp"
 #include "modules/module_manager.hpp"
@@ -29,7 +30,8 @@ namespace mesos {
 #define MODULE_API_VERSION_FUNCTION_STRING \
   #MODULE_API_VERSION_FUNCTION
 
-typedef string(*StringFunction)();
+#define MESOS_VERSION_FUNCTION_STRING \
+  #MESOS_VERSION_FUNCTION
 
 ModuleManager::ModuleManager()
 {
@@ -37,15 +39,13 @@ ModuleManager::ModuleManager()
   roleToVersion["Isolator"]      = "0.22";
   roleToVersion["Authenticator"] = "0.28";
   roleToVersion["Allocator"]     = "0.22";
-}
 
-// .30
-//
 // mesos           library      result
 // 0.18(0.18)      0.18         FINE
 // 0.18(0.18)      0.19         NOT FINE
 // 0.19(0.18)      0.18         FINE
 // 0.19(0.19)      0.18         NOT FINE
+}
 
 template<typename T>
 static Try<T> callFunction(DynamicLibrary *lib, string functionName)
@@ -66,15 +66,15 @@ Try<DynamicLibrary*> ModuleManager::loadModuleLibrary(string path)
     return Error(result.error());
   }
 
-  Try<string> libraryVersion =
+  Try<string> apiVersion =
     callFunction<string>(lib, MODULE_API_VERSION_FUNCTION_STRING);
-  if (libraryVersion.isError()) {
-    return libraryVersion.error();
+  if (apiVersion.isError()) {
+    return Error(apiVersion.error());
   }
-  if (libraryVersion != MODULE_API_VERSION) {
+  if (apiVersion != MODULE_API_VERSION) {
     return Error("Module API version mismatch. " +
                  "Mesos has: " + MODULE_API_VERSION +
-                 "library requires: " + libraryVersion);
+                 "library requires: " + apiVersion);
   }
   return lib;
 }
@@ -83,16 +83,44 @@ Try<Nothing> ModuleManager::verifyModuleRole(string module, DynamicLibrary *lib)
 {
   Try<string> role = callFunction<string>(lib, "get" + module + "Role");
   if (role.isError()) {
-    return role.error();
+    return Error(role.error());
   }
-  if (!roleToVersion.contains(role)) {
-    return Error("Unknown module role: " + role);
+  if (!roleToVersion.contains(role.get())) {
+    return Error("Unknown module role: " + role.get());
   }
 
-  if (libraryMesosVersion != roleToVersion[role]) {
-    return Error("Role version mismatch." +
-                 " Mesos supports: >" + roleToVersion[role] +
-                 " module requires: " + libraryVersion);
+  Try<string> libraryMesosVersion =
+    callFunction<string>(lib, MESOS_VERSION_FUNCTION_STRING);
+  if (libraryMesosVersion.isError()) {
+    return Error(libraryMesosVersion.error());
+  }
+
+  if (numify<double>(libraryMesosVersion.get()) >=
+      numify<double>(roleToVersion[role.get()])) {
+    return Error("Role version mismatch: " + role.get() +
+                 " supported by Mesos with version >=" +
+                 roleToVersion[role.get()] +
+                 ", but module is compiled with " +
+                 libraryMesosVersion.get());
+  }
+  return Nothing();
+}
+
+Try<Nothing> ModuleManager::loadLibraries(string modulePaths)
+{
+  // load all libs
+  // check their MMS version
+  // if problem, bail
+  foreach (path, paths) {
+    Try<DynamicLibrary*> lib = loadModuleLibrary(path);
+    if (lib.isError()) {
+      return Error(lib.error());
+    }
+
+    foreach (module, modules) {
+      verifyModuleRole(lib.get(), module);
+      moduleToDynLib[module] = lib.get();
+    }
   }
   return Nothing();
 }
@@ -103,29 +131,12 @@ Try<Role*> loadModule(std::string moduleName)
   Option<DynamicLibrary*> lib = moduleToDynamicLibrary[moduleName];
   ASSERT_SOME(lib);
 
-  Try<Role*> inst = callFunction<Role*>(lib, "create" + module + "Instance");
-  if (inst.isError()) {
-    return inst.error();
+  Try<Role*> instance =
+      callFunction<Role*>(lib.get(), "create" + moduleName + "Instance");
+  if (instance.isError()) {
+    return Error(instance.error());
   }
-  return inst;
-}
-
-Try<Nothing> ModuleManager::loadLibraries(string modulePaths)
-{
-  // load all libs
-  // check their MMS version
-  // if problem, bail
-  foreach (path:module, paths:modules) {
-    DynamicLibrary* lib = loadModuleLibrary(path);
-
-    // foreach lib:module
-    // dlsym module, get return value, which has type Module
-    // for each of those, call verification
-    verifyModuleRole(lib, module);
-
-    moduleToDynLib[module] = lib;
-  }
-  return Nothing();
+  return instance;
 }
 
 } // namespace mesos {
