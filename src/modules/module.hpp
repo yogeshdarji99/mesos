@@ -75,10 +75,9 @@ public:
    */
   Try<Nothing> loadLibraries(std::string modulePath);
 
-  const int version;
 private:
-  hashmap<std::string, DynamicLibrary*> moduleLibs;
-  hashmap<std::string, std::string> roleVersion;
+  hashmap<std::string, DynamicLibrary*> moduleToDynLib;
+  hashmap<std::string, std::string> roleToVersion;
 
 };
 

@@ -32,12 +32,61 @@ namespace mesos {
 typedef string(*StringFunction)();
 
 ModuleManager::ModuleManager()
-  : version(1)
 {
-  roleVersion["TestModule"]    = "0.22";
-  roleVersion["Isolator"]      = "0.22";
-  roleVersion["Authenticator"] = "0.22";
-  roleVersion["Allocator"]     = "0.22";
+  roleToVersion["TestModule"]    = "0.22";
+  roleToVersion["Isolator"]      = "0.22";
+  roleToVersion["Authenticator"] = "0.22";
+  roleToVersion["Allocator"]     = "0.22";
+}
+
+Try<string> ModuleManager::callStringFunction(DynamicLibrary *lib,
+                                              string functionName)
+{
+  Try<void*> symbol = lib->loadSymbol(functionName);
+  if (symbol.isError()) {
+    return Error(symbol.error());
+  }
+  StringFunction* v = (StringFunction*) symbol;
+  return (*v)();
+}
+
+Try<DynamicLibrary*> ModuleManager::loadModuleLibrary(string path)
+{
+  DynamicLibrary *lib = new DynamicLibrary();
+  Try<Nothing> result = lib->open(path);
+  if (!result.isSome()) {
+    return Error(result.error());
+  }
+
+  Try<string> libraryVersion =
+    callStringFunction(lib, MODULE_API_VERSION_FUNCTION_STRING);
+  if (libraryVersion.isError()) {
+    return libraryVersion.error();
+  }
+  if (libraryVersion != MODULE_API_VERSION) {
+    return Error("Module API version mismatch. " +
+                 "Mesos has: " + MODULE_API_VERSION +
+                 "library requires: " + libraryVersion);
+  }
+  return lib;
+}
+
+Try<Nothing> ModuleManager::verifyModuleRole(string module, DynamicLibrary *lib)
+{
+  Try<string> role = callStringFunction(lib, "get" + module + "Role");
+  if (role.isError()) {
+    return role.error();
+  }
+  if (roleToVersion.find(role) == roleToVersion.end()) {
+    return Error("Unknown module role: " + role);
+  }
+
+  if (libraryVersion != roleToVersion[role]) {
+    return Error("Role version mismatch." +
+                 " Mesos supports: >" + roleToVersion[role] +
+                 " module requires: " + libraryVersion);
+  }
+  return Nothing();
 }
 
 Try<Nothing> ModuleManager::loadLibraries(string modulePaths)
@@ -46,45 +95,14 @@ Try<Nothing> ModuleManager::loadLibraries(string modulePaths)
   // check their MMS version
   // if problem, bail
   foreach (path:module, paths:modules) {
-    DynamicLibrary lib;
-    Try<Nothing> result = lib.open(path);
-    if (!result.isSome()) {
-      return Error(result.error());
-    }
-
-    Try<void*> symbol = lib.loadSymbol(MODULE_API_VERSION_FUNCTION_STRING);
-    if (symbol.isError()) {
-      return Error(symbol.error());
-    }
-    StringFunction* v = (StringFunction*) symbol;
-    string libraryVersion = (*v)();
-    if (libraryVersion != MODULE_API_VERSION) {
-      return Error("Module API version mismatch. " +
-                   "Mesos has: " + MODULE_API_VERSION +
-                   "library requires: " + libraryVersion);
-    }
+    DynamicLibrary *lib = loadModuleLibrary(path);
 
     // foreach lib:module
     // dlsym module, get return value, which has type Module
     // for each of those, call verification
-    symbol = lib.loadSymbol("get" + module + "role");
-    if (symbol.isError()) {
-      return Error(symbol.error());
-    }
-    StringFunction* r = (StringFunction*) symbol;
-    string role = (*r)();
+    verifyModuleRole(lib, module);
 
-    if (roleVersion.find(role) == roleVersion.end()) {
-      return Error("Unknown module role: " + role);
-    }
-
-    if (!isAcceptableRoleVersion(libraryVersion)) {
-      return Error("Role version mismatch." +
-                   " Mesos supports: >" + roleVersion[role] +
-                   " module requires: " + libraryVersion);
-    }
-
-    moduleLibMap[module] = lib;
+    moduleToDynLib[module] = lib;
   }
   return Nothing();
 }
