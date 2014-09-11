@@ -47,7 +47,7 @@
 #include "slave/containerizer/mesos/containerizer.hpp"
 #include "slave/containerizer/mesos/launch.hpp"
 
-#include "modules/module_manager.hpp"
+#include "module/module_manager.hpp"
 
 using std::list;
 using std::map;

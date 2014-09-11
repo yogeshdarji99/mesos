@@ -264,7 +264,7 @@ libmesos_no_3rdparty_la_SOURCES =					\
 	master/registry.proto                                           \
 	master/registrar.cpp						\
 	master/repairer.cpp						\
-	modules/module_manager.cpp					\
+	module/module_manager.cpp					\
 	sasl/authenticatee.hpp						\
 	sasl/authenticator.hpp						\
 	sasl/auxprop.hpp						\

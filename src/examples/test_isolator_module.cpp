@@ -28,7 +28,7 @@
 
 #include <tests/module.hpp>
 
-#include <modules/isolator_module.hpp>
+#include <module/isolator_module.hpp>
 
 #include <slave/containerizer/isolator.hpp>
 
@@ -47,7 +47,7 @@ public:
   }
 
   virtual ~TestIsolatorImpl() {}
-  
+
   virtual process::Future<Nothing> recover(
       const std::list<state::RunState>& state) {
     return Nothing();

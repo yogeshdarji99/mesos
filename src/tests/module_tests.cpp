@@ -18,8 +18,8 @@
 
 #include <slave/containerizer/isolator.hpp>
 
-#include "modules/module.hpp"
-#include "modules/isolator_module.hpp"
+#include "module/module.hpp"
+#include "module/isolator_module.hpp"
 #include "module.hpp"
 
 #include "tests/flags.hpp"

@@ -25,8 +25,8 @@
 
 #include "strings.hpp"
 
-#include "modules/module.hpp"
-#include "modules/module_manager.hpp"
+#include "module/module.hpp"
+#include "module/module_manager.hpp"
 
 using std::string;
 using std::vector;

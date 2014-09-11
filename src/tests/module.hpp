@@ -23,7 +23,7 @@
 
 #include <stout/memory.hpp>
 
-#include <modules/module.hpp>
+#include <module/module.hpp>
 
 class TestModule : public Module {
 public:
