@@ -18,7 +18,8 @@
 
 #include <slave/containerizer/isolator.hpp>
 
-#include "module/module.hpp"
+#include <mesos/module.hpp>
+
 #include "module/isolator_module.hpp"
 #include "module.hpp"
 

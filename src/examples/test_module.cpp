@@ -19,23 +19,21 @@
 #include <mesos/module.hpp>
 #include <tests/module.hpp>
 
-DEFINE_VERSIONS()
-
 class ExampleModule : public TestModule
 {
 public:
-  int foo(char a, long b)
+  virtual int foo(char a, long b)
   {
     return a + b;
   }
 
-  int bar(float a, double b)
+  virtual int bar(float a, double b)
   {
     return a * b;
   }
 };
 
-DEFINE_MODULE(TestModule, "example")
+MESOS_MODULE(TestModule, example)
 {
   return new ExampleModule();
 }

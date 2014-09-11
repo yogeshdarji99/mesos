@@ -24,7 +24,8 @@
 #include <stout/numify.hpp>
 #include <process/check.hpp>
 
-#include "module/module.hpp"
+#include <mesos/module.hpp>
+
 #include "module/module_manager.hpp"
 
 using std::string;

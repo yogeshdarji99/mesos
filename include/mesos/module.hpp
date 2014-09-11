@@ -22,23 +22,19 @@
 #include <string>
 #include <mesos/mesos.hpp>
 
-namespace mesos {
-
 // Module implementation utilities:
 
 #define MODULE_API_VERSION "1"
 
-#define MESOS_VERSION_FUNCTION mesosVersion
-#define MODULE_API_VERSION_FUNCTION moduleApiVersion
+#define MESOS_VERSION_FUNCTION mesos_get_version
+#define MESOS_MODULE_API_VERSION_FUNCTION mesos_get_module_api_version
 
-#define DEFINE_VERSIONS() \
-  std::string MESOS_VERSION_FUNCTION() { return MESOS_VERSION; } \
-  std::string MODULE_API_VERSION_FUNCTION() { return MODULE_API_VERSION; }
-
-#define DEFINE_MODULE(role, name) \
-  std::string get##name##Role() { return #role; } \
-  role create##name##Instance()
-
-} // namespace mesos {
+#define MESOS_MODULE(role, name) \
+  extern "C" const char* MESOS_VERSION_FUNCTION() { return MESOS_VERSION; } \
+  extern "C" const char* MODULE_API_VERSION_FUNCTION() { \
+    return MODULE_API_VERSION; \
+  } \
+  extern "C" const char* get_##name##_role() { return #role; } \
+  extern "C" role* create_##name##_module()
 
 #endif // __MODULE_HPP__

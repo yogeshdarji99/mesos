@@ -26,6 +26,7 @@
 
 #include <stout/try.hpp>
 
+#include <mesos/module.hpp>
 #include <tests/module.hpp>
 
 #include <slave/containerizer/isolator.hpp>
@@ -93,7 +94,7 @@ extern "C" {
 void* create_isolator_module(void *args) {
   process::Owned<mesos::internal::slave::IsolatorProcess> process(
       new mesos::internal::slave::TestIsolatorProcess);
-  return new mesos::internal::slave::TestIsolatorImpl(process);
+  return new mesos::internal::slave::Isolator(process);
 }
 };
 

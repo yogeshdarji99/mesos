@@ -301,6 +301,7 @@ pkginclude_HEADERS =							\
   $(top_srcdir)/include/mesos/scheduler.hpp				\
   $(top_srcdir)/include/mesos/resources.hpp				\
   $(top_srcdir)/include/mesos/values.hpp				\
+  $(top_srcdir)/include/mesos/module.hpp				\
   $(top_srcdir)/include/mesos/mesos.proto
 
 nodist_pkginclude_HEADERS =						\
