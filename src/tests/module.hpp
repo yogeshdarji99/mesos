@@ -25,16 +25,11 @@
 
 #include <module/module.hpp>
 
-class TestModule : public Module {
+class TestModule {
 public:
-  TestModule() : Module(Module::TEST_MODULE) {}
+  TestModule() {}
 
   virtual ~TestModule() {}
-
-  static Try<memory::shared_ptr<TestModule> > init(DynamicLibrary& library)
-  {
-    return module::init<TestModule>(library, "create_test_module");
-  }
 
   virtual int foo(char a, long b) = 0;
 

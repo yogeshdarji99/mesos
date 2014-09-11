@@ -29,10 +29,9 @@ using namespace mesos;
 using namespace mesos::internal;
 using namespace mesos::internal::tests;
 
-class ModulesTest : public MesosTest {};
+class ModuleTest : public MesosTest {};
 
-
-TEST_F(ModulesTest, LoadModuleTest)
+TEST_F(ModuleTest, ExampleModuleTest)
 {
   ModuleManager manager;
   Try<Nothing> result = manager.loadLibraries(
@@ -43,22 +42,36 @@ TEST_F(ModulesTest, LoadModuleTest)
 #else
           "libtest.dylib"
 #endif
-          ) + ":TestModule");
-  ASSERT_SOME(result);
+          ) + ":example");
+  EXPECT_SOME(result);
 
   Try<memory::shared_ptr<TestModule> > module =
-    manager.createTestModule();
-  ASSERT_SOME(module);
+    manager.loadModule("example");
+  EXPECT_SOME(module);
 
-  EXPECT_EQ(module.get()->foo('a', 1024), 0xabab);
-  EXPECT_EQ(module.get()->bar(0.5, 0.75), 0xf0f0);
+  EXPECT_EQ(module.get()->foo('A', 1024), 1089);
+  EXPECT_EQ(module.get()->bar(0.5, 10.8), 5);
 }
 
-
-TEST_F(ModulesTest, LoadModuleTest)
+TEST_F(ModuleTest, UnknownLibraryTest)
 {
-  DynamicLibrary library;
-  Try<Nothing> result = library.open(
+  ModuleManager manager;
+  Try<Nothing> result = manager.loadLibraries(
+      path::join(
+          tests::flags.build_dir, "src", ".libs",
+#ifdef __linux__
+          "libunknown.so"
+#else
+          "libunknown.dylib"
+#endif
+          ) + ":example");
+  EXPECT_ERROR(result);
+}
+
+TEST_F(ModuleTest, UnknownModuleTest)
+{
+  ModuleManager manager;
+  Try<Nothing> result = manager.loadLibraries(
       path::join(
           tests::flags.build_dir, "src", ".libs",
 #ifdef __linux__
@@ -66,35 +79,7 @@ TEST_F(ModulesTest, LoadModuleTest)
 #else
           "libtest.dylib"
 #endif
-          ));
-  ASSERT_SOME(result);
-
-  Try<memory::shared_ptr<TestModule> > module =
-    TestModule::init(library);
-  ASSERT_SOME(module);
-
-  EXPECT_EQ(module.get()->foo('a', 1024), 0xabab);
-  EXPECT_EQ(module.get()->bar(0.5, 0.75), 0xf0f0);
+          ) + ":unknown");
+  EXPECT_ERROR(result);
 }
 
-TEST_F(ModulesTest, IsolatorModuleTest)
-{
-  DynamicLibrary library;
-  Try<Nothing> result = library.open(
-      path::join(
-          tests::flags.build_dir, "src", ".libs",
-#ifdef __linux__
-          "libtestisolator.so"
-#else
-          "libtestisolator.dylib"
-#endif
-          ));
-  ASSERT_SOME(result);
-
-  Try<memory::shared_ptr<mesos::internal::slave::Isolator> > module =
-    mesos::internal::slave::IsolatorModule::init(library);
-  ASSERT_SOME(module);
-}
-
-// TODO(nnielsen): Negative-test of module load of modules with
-// in-correct type, API version, etc.

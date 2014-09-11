@@ -16,26 +16,27 @@
  * limitations under the License.
  */
 
+#include <mesos/module.hpp>
 #include <tests/module.hpp>
 
-class TestModuleImpl : public TestModule
+DEFINE_VERSIONS()
+
+class ExampleModule : public TestModule
 {
 public:
   int foo(char a, long b)
   {
-    return 0xabab;
+    return a + b;
   }
 
   int bar(float a, double b)
   {
-    return 0xf0f0;
+    return a * b;
   }
 };
 
-extern "C" {
-void* create_test_module(void* args) {
-  return new TestModuleImpl;
+DEFINE_MODULE(TestModule, "example")
+{
+  return new ExampleModule();
 }
-
-};
 
