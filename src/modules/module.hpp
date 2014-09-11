@@ -62,33 +62,6 @@ public:
 
 };
 
-
-/**
- * Mesos module loading.
- * Phases:
- * 1. Load dynamic libraries that contain modules.
- * 2. Verify versions and compatibilities.
- *   a) Library compatibility.
- *   b) Module compatibility.
- * 3. Instantiate singleton per module.
- * 4. Bind reference to use case.
- */
-class ModuleManager {
-public:
-  ModuleManager();
-
-  /**
-   * Phase 1 and 2.
-   */
-  Try<Nothing> loadLibraries(std::string modulePath);
-
-private:
-  hashmap<std::string, DynamicLibrary*> moduleToDynLib;
-  hashmap<std::string, std::string> roleToVersion;
-
-};
-
-
 } // namespace mesos {
 
 namespace module {
