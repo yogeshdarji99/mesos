@@ -19,13 +19,10 @@
 #ifndef __MODULE_MANAGER_HPP__
 #define __MODULE_MANAGER_HPP__
 
-#include <boost/noncopyable.hpp>
-
+#include <string>
+#include <stout/hashmap.hpp>
 #include <stout/dynamiclibrary.hpp>
-#include <stout/lambda.hpp>
-#include <stout/memory.hpp>
 
-#include <mesos/mesos.hpp>
 #include <mesos/mesos.hpp>
 
 namespace mesos {
@@ -48,10 +45,13 @@ public:
    * Phase 1 and 2.
    */
   Try<Nothing> loadLibraries(std::string modulePath);
-
-  Try<Isolator> createIsolator(std::string moduleName);
+  //Try<Isolator> loadIsolatorModule(std::string moduleName);
+  template<typename Role> Try<Role*> loadModule(std::string moduleName);
 
 private:
+  Try<DynamicLibrary*> loadModuleLibrary(std::string path);
+  Try<Nothing> verifyModuleRole(std::string module, DynamicLibrary *lib);
+
   hashmap<std::string, DynamicLibrary*> moduleToDynLib;
   hashmap<std::string, std::string> roleToVersion;
 

@@ -19,12 +19,7 @@
 #ifndef __MODULE_HPP__
 #define __MODULE_HPP__
 
-#include <boost/noncopyable.hpp>
-
-#include <stout/dynamiclibrary.hpp>
-#include <stout/lambda.hpp>
-#include <stout/memory.hpp>
-
+#include <string>
 #include <mesos/mesos.hpp>
 
 namespace mesos {
@@ -45,76 +40,19 @@ namespace mesos {
   role create##name##Instance()
 
 
-class ModuleInfo
-{
-public:
-  ModuleRole role;
-
-  // For dependency resolution only.
-  int version;
-  vector<std::string> depends;
-  vector<std::string> provides;
-  vector<std::string> conflicts;
-
-};
+// class ModuleInfo
+// {
+// public:
+//   ModuleRole role;
+// 
+//   // For dependency resolution only.
+//   int version;
+//   vector<std::string> depends;
+//   vector<std::string> provides;
+//   vector<std::string> conflicts;
+// 
+// };
 
 } // namespace mesos {
-
-namespace module {
-
-template <typename T>
-Try<memory::shared_ptr<T> > init(
-    DynamicLibrary& library,
-    const std::string& entrySymbol,
-    void* optionalArguments = NULL)
-{
-  Try<void*> symbol = library.loadSymbol(entrySymbol);
-  if (symbol.isError()) {
-    return Error(symbol.error());
-  }
-
-  if (symbol.get() == NULL) {
-    return Error("Symbol should not be NULL pointer");
-  }
-
-  void* (*entryFunction)(void*) = (void *(*)(void*))symbol.get();
-  void* moduleData = entryFunction(optionalArguments);
-
-  // TODO(nnielsen): dynamic_cast does not work on void pointers.
-  T* module = (T*)(moduleData);
-
-  return memory::shared_ptr<T>(module);
-}
-
-}
-
-// The module class works as a wrapper "around" the external implementation
-// (brought in the dynamic loaded library).
-class Module : public boost::noncopyable
-{
-public:
-  virtual ~Module() { }
-
-protected:
-  const std::string mesosVersion_;
-  int moduleSystemVersion_;
-  int moduleVersion_;
-
-  enum ModuleIdentifier {
-    UNKNOWN_MODULE = 0,
-    TEST_MODULE = 1,
-    ISOLATOR_MODULE = 2
-  } moduleIdentifier_;
-
-  Module(
-      ModuleIdentifier id,
-      int moduleVersion = 1,
-      int moduleSystemVersion = 1,
-      const std::string mesosVersion = MESOS_VERSION)
-    : mesosVersion_(MESOS_VERSION),
-      moduleSystemVersion_(moduleSystemVersion),
-      moduleIdentifier_(id) { }
-
-};
 
 #endif // __MODULE_HPP__
