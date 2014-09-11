@@ -31,15 +31,27 @@ namespace mesos {
 
 #define MODULE_API_VERSION "1"
 
+#define MESOS_VERSION_FUNCTION mesosVersion
 #define MODULE_API_VERSION_FUNCTION moduleApiVersion
 
-#define DEFINE_API_VERSION() \
+#define DEFINE_VERSIONS() \
+  std::string MESOS_VERSION_FUNCTION() { return MESOS_VERSION; } \
   std::string MODULE_API_VERSION_FUNCTION() { return MODULE_API_VERSION; }
+
+#define DEFINE_MODULE(role, name) \
+  std::string get##name##Role() { return #role; } \
+  role create##name##Instance()
 
 class ModuleInfo
 {
 public:
+  ModuleRole role;
+
+  // For dependency resolution only.
   int version;
+  vector<std::string> depends;
+  vector<std::string> provides;
+  vector<std::string> conflicts;
 
 };
 
@@ -56,25 +68,18 @@ public:
  */
 class ModuleManager {
 public:
-  ModuleManager() : version(1)
-  {
-
-  }
+  ModuleManager();
 
   /**
    * Phase 1 and 2.
    */
-  Try<Nothing> parseFlag(std::string flagValue);
+  Try<Nothing> loadLibraries(std::string modulePath);
 
   const int version;
 private:
-  // Phase 1.
-  Try<DynamicLibrary&> loadLibrary(std::string path);
+  hashmap<std::string, DynamicLibrary*> moduleLibs;
+  hashmap<std::string, std::string> roleVersion;
 
-  // Used for phase 2b.
-  Try<ModuleInfo> getModuleInfo(DynamicLibrary& lib, std::string moduleName);
-
-  hashmap<std::string, Module> modules;
 };
 
 

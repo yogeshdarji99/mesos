@@ -17,43 +17,76 @@
  */
 
 #include <string>
+#include <hashmap>
 
 #include "module.hpp"
 
 using std::string;
+using std::hashmap;
 
 namespace mesos {
 
 #define MODULE_API_VERSION_FUNCTION_STRING \
   #MODULE_API_VERSION_FUNCTION
 
-typedef string(*VersionFunction)();
+typedef string(*StringFunction)();
 
-Try<Nothing> ModuleManager::parseFlag(string flagValue)
+ModuleManager::ModuleManager()
+  : version(1)
+{
+  roleVersion["TestModule"]    = "0.22";
+  roleVersion["Isolator"]      = "0.22";
+  roleVersion["Authenticator"] = "0.22";
+  roleVersion["Allocator"]     = "0.22";
+}
+
+Try<Nothing> ModuleManager::loadLibraries(string modulePaths)
 {
   // load all libs
-
   // check their MMS version
   // if problem, bail
-  foreach (DynamicLibrary &lib, dynlibs) {
-    Try<void*> symbol = library.loadSymbol(MODULE_API_VERSION_FUNCTION_STRING);
+  foreach (path:module, paths:modules) {
+    DynamicLibrary lib;
+    Try<Nothing> result = lib.open(path);
+    if (!result.isSome()) {
+      return Error(result.error());
+    }
+
+    Try<void*> symbol = lib.loadSymbol(MODULE_API_VERSION_FUNCTION_STRING);
     if (symbol.isError()) {
       return Error(symbol.error());
     }
-    VersionFunction* v = (VersionFunction*) symbol;
+    StringFunction* v = (StringFunction*) symbol;
     string libraryVersion = (*v)();
     if (libraryVersion != MODULE_API_VERSION) {
       return Error("Module API version mismatch. " +
                    "Mesos has: " + MODULE_API_VERSION +
                    "library requires: " + libraryVersion);
     }
+
+    // foreach lib:module
+    // dlsym module, get return value, which has type Module
+    // for each of those, call verification
+    symbol = lib.loadSymbol("get" + module + "role");
+    if (symbol.isError()) {
+      return Error(symbol.error());
+    }
+    StringFunction* r = (StringFunction*) symbol;
+    string role = (*r)();
+
+    if (roleVersion.find(role) == roleVersion.end()) {
+      return Error("Unknown module role: " + role);
+    }
+
+    if (!isAcceptableRoleVersion(libraryVersion)) {
+      return Error("Role version mismatch." +
+                   " Mesos supports: >" + roleVersion[role] +
+                   " module requires: " + libraryVersion);
+    }
+
+    moduleLibMap[module] = lib;
   }
-
-  // foreach lib:module
-  // dlsym module, get return value, which has type Module
-  // for each of those, call verification
-
-  // return map (module name -> Module)
+  return Nothing();
 }
 
 } // namespace mesos {
