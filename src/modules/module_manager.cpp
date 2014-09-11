@@ -89,7 +89,7 @@ Try<Nothing> ModuleManager::verifyModuleRole(string module, DynamicLibrary *lib)
     return Error("Unknown module role: " + role);
   }
 
-  if (libraryVersion != roleToVersion[role]) {
+  if (libraryMesosVersion != roleToVersion[role]) {
     return Error("Role version mismatch." +
                  " Mesos supports: >" + roleToVersion[role] +
                  " module requires: " + libraryVersion);
@@ -127,23 +127,5 @@ Try<Nothing> ModuleManager::loadLibraries(string modulePaths)
   }
   return Nothing();
 }
-
-void* ModuleManager::findModuleCreator(std::string moduleName)
-{
-  Option<DynamicLibrary*> lib = moduleToDynamicLibrary[moduleName];
-  ASSERT_SOME(lib);
-  Try<VoidPointerFunction> symbol = lib.get()->loadSymbol(functionName);
-  if (symbol.isError()) {
-    return Error(symbol.error());
-  }
-  return (VoidPointerFunction*) symbol;
-}
-
-Try<Isolator> ModuleManager::createIsolator(std::string moduleName)
-{
-  IsolatorFunction f =  (IsolatorFunction) findModuleCreator(moduleName);
-  return f();
-}
-
 
 } // namespace mesos {
