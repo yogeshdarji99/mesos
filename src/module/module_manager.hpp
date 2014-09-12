@@ -50,8 +50,8 @@ namespace internal {
  * 2. Verify versions and compatibilities.
  *   a) Library compatibility.
  *   b) Module compatibility.
- * 3. Instantiate singleton per module.
- * 4. Bind reference to use case.
+ * 3. Instantiate singleton per module. (happens in the library)
+ * 4. Bind reference to use case. (happens in Mesos)
  */
 class ModuleManager {
 public:

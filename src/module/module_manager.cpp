@@ -44,16 +44,41 @@ ModuleManager* ModuleManager::instance()
 
 ModuleManager::ModuleManager()
 {
+// ATTENTION: Every time a Mesos developer breaks compatibility
+// with a module role type, this table needs to be updated.
+// Specifically, the version value in the entry corresponding to the role
+// needs to be set to the Mesos version that affects the current change.
+// Typically that should be the version currently under development.
+
   roleToVersion["TestModule"]    = "0.21.0";
   roleToVersion["Isolator"]      = "0.21.0";
   roleToVersion["Authenticator"] = "0.21.0";
   roleToVersion["Allocator"]     = "0.21.0";
 
-// mesos           library      result
-// 0.18(0.18)      0.18         FINE
-// 0.18(0.18)      0.19         NOT FINE
-// 0.19(0.18)      0.18         FINE
-// 0.19(0.19)      0.18         NOT FINE
+// What happens then when Mesos is built with a certain version,
+// 'roleToVersion' states a certain other minimum version,
+// and a module library is built against "module.hpp"
+// belonging to yet another Mesos version?
+//
+// Mesos can admit libraries built against earlier versions of itself
+// by stating so explicitly in 'roleToVersion'.
+// If a library is built with a Mesos version greater than or equal to
+// the one stated in 'roleToVersion', it passes this verification step.
+// Otherwise it is rejected when attempting to load it.
+//
+// Here are some examples:
+//
+// Mesos   roleToVersion    library    modules loadable?
+// 0.18        0.18          0.18           YES
+// 0.29        0.18          0.18           YES
+// 0.29        0.18          0.21           YES
+// 0.18        0.18          0.29           NO
+// 0.29        0.21          0.18           NO
+// 0.29        0.29          0.18           NO
+
+// ATTENTION: This mechanism only protects the interfaces of modules, not how
+// they maintain functional compatibility with Mesos and among each other.
+// This is covered by their own "isCompatible" call.
 }
 
 Try<DynamicLibrary*> ModuleManager::loadModuleLibrary(string path)
