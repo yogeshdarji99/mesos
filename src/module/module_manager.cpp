@@ -35,10 +35,10 @@ namespace mesos {
 
 ModuleManager::ModuleManager()
 {
-  roleToVersion["TestModule"]    = new MesosVersion("0.21.0");
-  roleToVersion["Isolator"]      = new MesosVersion("0.21.0");
-  roleToVersion["Authenticator"] = new MesosVersion("0.21.0");
-  roleToVersion["Allocator"]     = new MesosVersion("0.21.0");
+  roleToVersion["TestModule"]    = "0.21.0";
+  roleToVersion["Isolator"]      = "0.21.0";
+  roleToVersion["Authenticator"] = "0.21.0";
+  roleToVersion["Allocator"]     = "0.21.0";
 
 // mesos           library      result
 // 0.18(0.18)      0.18         FINE
@@ -87,14 +87,15 @@ Try<Nothing> ModuleManager::verifyModuleRole(DynamicLibrary *lib, string module)
   if (libraryMesosVersionStr.isError()) {
     return Error(libraryMesosVersionStr.error());
   }
+  string libraryMesosVersion(libraryMesosVersionStr.get());
 
-  MesosVersion libraryMesosVersion(libraryMesosVersionStr.get());
-  if (libraryMesosVersion < *roleToVersion[role]) {
+  // TODO: Replace the '!=' check with '<' check.
+  if (libraryMesosVersion != roleToVersion[role]) {
     return Error("Role version mismatch: " + role +
                  " supported by Mesos with version >=" +
-                 roleToVersion[role]->str() +
+                 roleToVersion[role] +
                  ", but module is compiled with " +
-                 libraryMesosVersion.str());
+                 libraryMesosVersion);
   }
   return Nothing();
 }

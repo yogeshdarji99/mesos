@@ -20,10 +20,8 @@
 #define __MODULE_MANAGER_HPP__
 
 #include <string>
-#include <stout/strings.hpp>
 #include <stout/hashmap.hpp>
 #include <stout/dynamiclibrary.hpp>
-#include <process/check.hpp>
 
 #include <mesos/mesos.hpp>
 
@@ -43,57 +41,6 @@
   "mesos_create_module_" + moduleName
 
 namespace mesos {
-
-class MesosVersion
-{
-  public:
-    MesosVersion(std::string str)
-      : _versionStr(str) {
-        std::vector<std::string> versions = strings::split(str, ".");
-        CHECK(versions.size() == 3);
-        _major = numify<int>(versions[0]).get();
-        _minor = numify<int>(versions[1]).get();
-        _patch = numify<int>(versions[2]).get();
-      }
-
-    std::string str() const { return _versionStr; }
-    unsigned major() const { return _major; }
-    unsigned minor() const { return _minor; }
-    unsigned patch() const { return _patch; }
-
-    bool operator==(const MesosVersion &o) const {
-      return _major == o._major &&
-        _minor == o._minor &&
-        _patch == o._patch;
-    }
-
-    bool operator<(const MesosVersion &o) const {
-      return _major < o._major ||
-        (_major == o._major && _minor < o._minor) ||
-        (_major == o._major && _minor == o._minor && _patch < o._patch);
-    }
-
-    bool operator>(const MesosVersion &o) const {
-      return _major > o._major ||
-        (_major == o._major && _minor > o._minor) ||
-        (_major == o._major && _minor == o._minor && _patch > o._patch);
-    }
-
-
-    bool operator<=(const MesosVersion &o) const {
-      return o > *this;
-    }
-
-    bool operator>=(const MesosVersion &o) const {
-      return o < *this;
-    }
-
-  private:
-    std::string _versionStr;
-    unsigned _major;
-    unsigned _minor;
-    unsigned _patch;
-};
 
 /**
  * Mesos module loading.
@@ -147,7 +94,7 @@ private:
   }
 
   hashmap<std::string, DynamicLibrary*> moduleToDynamicLibrary;
-  hashmap<std::string, MesosVersion*> roleToVersion;
+  hashmap<std::string, std::string> roleToVersion;
 };
 
 
