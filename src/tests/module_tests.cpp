@@ -19,6 +19,7 @@
 #include <slave/containerizer/isolator.hpp>
 
 #include <mesos/module.hpp>
+#include <module/module_manager.hpp>
 
 #include "module.hpp"
 
@@ -33,8 +34,7 @@ class ModuleTest : public MesosTest {};
 
 TEST_F(ModuleTest, ExampleModuleTest)
 {
-  ModuleManager manager;
-  Try<Nothing> result = manager.loadLibraries(
+  Try<Nothing> result = ModuleManager::loadLibraries(
       path::join(
           tests::flags.build_dir, "src", ".libs",
 #ifdef __linux__
@@ -46,7 +46,7 @@ TEST_F(ModuleTest, ExampleModuleTest)
   EXPECT_SOME(result);
 
   Try<TestModule*> module =
-    manager.loadModule<TestModule>("example");
+    ModuleManager::loadModule<TestModule>("example");
   EXPECT_SOME(module);
 
   EXPECT_EQ(module.get()->foo('A', 1024), 1089);
@@ -55,8 +55,7 @@ TEST_F(ModuleTest, ExampleModuleTest)
 
 TEST_F(ModuleTest, UnknownLibraryTest)
 {
-  ModuleManager manager;
-  Try<Nothing> result = manager.loadLibraries(
+  Try<Nothing> result = ModuleManager::loadLibraries(
       path::join(
           tests::flags.build_dir, "src", ".libs",
 #ifdef __linux__
@@ -70,8 +69,7 @@ TEST_F(ModuleTest, UnknownLibraryTest)
 
 TEST_F(ModuleTest, UnknownModuleTest)
 {
-  ModuleManager manager;
-  Try<Nothing> result = manager.loadLibraries(
+  Try<Nothing> result = ModuleManager::loadLibraries(
       path::join(
           tests::flags.build_dir, "src", ".libs",
 #ifdef __linux__

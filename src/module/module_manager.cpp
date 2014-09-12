@@ -34,8 +34,6 @@ using std::vector;
 namespace mesos {
 namespace internal {
 
-static hashmap<std::string, std::string> roleToVersion;
-
 ModuleManager* ModuleManager::instance()
 {
   static ModuleManager moduleManager;
@@ -112,7 +110,7 @@ Try<Nothing> ModuleManager::verifyModuleRole(DynamicLibrary *lib, string module)
     return Error(roleStr.error());
   }
   string role(roleStr.get());
-  if (!roleToVersion.contains(role)) {
+  if (!instance()->roleToVersion.contains(role)) {
     return Error("Unknown module role: " + role);
   }
 
@@ -124,10 +122,10 @@ Try<Nothing> ModuleManager::verifyModuleRole(DynamicLibrary *lib, string module)
   string libraryMesosVersion(libraryMesosVersionStr.get());
 
   // TODO: Replace the '!=' check with '<' check.
-  if (libraryMesosVersion != roleToVersion[role]) {
+  if (libraryMesosVersion != instance()->roleToVersion[role]) {
     return Error("Role version mismatch: " + role +
                  " supported by Mesos with version >=" +
-                 roleToVersion[role] +
+                 instance()->roleToVersion[role] +
                  ", but module is compiled with " +
                  libraryMesosVersion);
   }

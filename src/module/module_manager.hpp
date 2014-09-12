@@ -96,6 +96,7 @@ private:
     return (*v)();
   }
 
+  hashmap<std::string, std::string> roleToVersion;
   hashmap<std::string, DynamicLibrary*> moduleToDynamicLibrary;
 };
 
