@@ -289,6 +289,11 @@ public:
         "max_executors_per_slave",
         "A maximum number of executors to allow per slave.");
 #endif  // WITH_NETWORK_ISOLATOR
+
+    add(&Flags::modules,
+        "modules",
+        "Modules to be loaded in the slave, in\n"
+        "the form 'path1:mod11:mod12:..,path2:mod21:mod22:...'.");
   }
 
   bool version;
@@ -321,6 +326,7 @@ public:
 #ifdef WITH_NETWORK_ISOLATOR
   Option<size_t> max_executors_per_slave;
 #endif  // WITH_NETWORK_ISOLATOR
+  Option<std::string> modules;
 };
 
 } // namespace master {

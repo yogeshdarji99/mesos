@@ -62,7 +62,6 @@
 #include "common/protobuf_utils.hpp"
 #include "common/type_utils.hpp"
 
-#include "module/module_manager.hpp"
 #include "files/files.hpp"
 
 #include "messages/messages.hpp"
@@ -392,8 +391,6 @@ private:
   MasterDetector* detector;
 
   Containerizer* containerizer;
-
-  ModuleManager moduleManager;
 
   Files* files;
 

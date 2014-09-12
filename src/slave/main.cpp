@@ -35,6 +35,8 @@
 
 #include "slave/slave.hpp"
 
+#include "module/module_manager.hpp"
+
 using namespace mesos::internal;
 using namespace mesos::internal::slave;
 
@@ -133,6 +135,12 @@ int main(int argc, char** argv)
 
   if (build::GIT_SHA.isSome()) {
     LOG(INFO) << "Git SHA: " << build::GIT_SHA.get();
+  }
+
+  Try<Nothing> result = ModuleManager::loadLibraries(flags.modules.get());
+  if (result.isError()) {
+    EXIT(1) << "Failed to create a ModuleManager: "
+            << result.error();
   }
 
   Try<Containerizer*> containerizer = Containerizer::create(flags, false);

@@ -41,6 +41,7 @@
   "mesos_create_module_" + moduleName
 
 namespace mesos {
+namespace internal {
 
 /**
  * Mesos module loading.
@@ -56,34 +57,36 @@ class ModuleManager {
 public:
   ModuleManager();
 
-  Try<Nothing> loadLibraries(std::string modulePath);
+  static ModuleManager* instance();
+
+  static Try<Nothing> loadLibraries(std::string modulePath);
 
   template<typename Role>
-  Try<Role*> loadModule(std::string moduleName)
+  static Try<Role*> loadModule(std::string moduleName)
   {
-    Option<DynamicLibrary*> lib = moduleToDynamicLibrary[moduleName];
+    Option<DynamicLibrary*> lib =
+      instance()->moduleToDynamicLibrary[moduleName];
     CHECK_SOME(lib);
 
-    Try<Role*> instance =
+    Try<Role*> module =
       callFunction<Role*>(lib.get(),
                           MESOS_CREATE_MODULE_FUNCTION_STRING(moduleName));
-    if (instance.isError()) {
-      return Error(instance.error());
+    if (module.isError()) {
+      return Error(module.error());
     }
-    return instance;
+    return module;
   }
 
-
-  bool containsModule(std::string moduleName) const {
-    return moduleToDynamicLibrary.contains(moduleName);
+  static bool containsModule(std::string moduleName) {
+    return instance()->moduleToDynamicLibrary.contains(moduleName);
   }
 
 private:
-  Try<DynamicLibrary*> loadModuleLibrary(std::string path);
-  Try<Nothing> verifyModuleRole(DynamicLibrary *lib, std::string module);
+  static Try<DynamicLibrary*> loadModuleLibrary(std::string path);
+  static Try<Nothing> verifyModuleRole(DynamicLibrary *lib, std::string module);
 
   template<typename T>
-  Try<T> callFunction(DynamicLibrary *lib, std::string functionName)
+  static Try<T> callFunction(DynamicLibrary *lib, std::string functionName)
   {
     Try<void*> symbol = lib->loadSymbol(functionName);
     if (symbol.isError()) {
@@ -94,10 +97,10 @@ private:
   }
 
   hashmap<std::string, DynamicLibrary*> moduleToDynamicLibrary;
-  hashmap<std::string, std::string> roleToVersion;
 };
 
 
+} // namespace internal {
 } // namespace mesos {
 
 #endif // __MODULE_MANAGER_HPP__

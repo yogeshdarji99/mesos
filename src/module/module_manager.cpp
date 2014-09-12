@@ -32,6 +32,15 @@ using std::string;
 using std::vector;
 
 namespace mesos {
+namespace internal {
+
+static hashmap<std::string, std::string> roleToVersion;
+
+ModuleManager* ModuleManager::instance()
+{
+  static ModuleManager moduleManager;
+  return &moduleManager;
+}
 
 ModuleManager::ModuleManager()
 {
@@ -117,11 +126,12 @@ Try<Nothing> ModuleManager::loadLibraries(string modulePaths)
         if (result.isError()) {
           return Error(result.error());
         }
-        moduleToDynamicLibrary[module] = lib.get();
+        instance()->moduleToDynamicLibrary[module] = lib.get();
       }
     }
   }
   return Nothing();
 }
 
+} // namespace internal {
 } // namespace mesos {

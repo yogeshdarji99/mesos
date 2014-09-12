@@ -53,6 +53,8 @@
 #include "master/registrar.hpp"
 #include "master/repairer.hpp"
 
+#include "module/module_manager.hpp"
+
 #include "state/in_memory.hpp"
 #include "state/log.hpp"
 #include "state/protobuf.hpp"
@@ -246,6 +248,12 @@ int main(int argc, char** argv)
   Repairer* repairer = new Repairer();
 
   Files files;
+
+  Try<Nothing> result = ModuleManager::loadLibraries(flags.modules.get());
+  if (result.isError()) {
+    EXIT(1) << "Failed to create a ModuleManager: "
+            << result.error();
+  }
 
   MasterContender* contender;
   MasterDetector* detector;

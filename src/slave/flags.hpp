@@ -314,6 +314,11 @@ public:
         "The name of the loopback network interface (e.g., lo). If it is\n"
         "not specified, the network isolator will try to guess it.");
 #endif // WITH_NETWORK_ISOLATOR
+
+    add(&Flags::modules,
+        "modules",
+        "Modules to be loaded in the slave, in\n"
+        "the form 'path1:mod11:mod12:..,path2:mod21:mod22:...'.");
   }
 
   bool version;
@@ -360,6 +365,7 @@ public:
   Option<std::string> eth0_name;
   Option<std::string> lo_name;
 #endif
+  Option<std::string> modules;
 };
 
 } // namespace slave {
