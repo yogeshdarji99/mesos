@@ -68,11 +68,20 @@ public:
       instance()->moduleToDynamicLibrary[moduleName];
     CHECK_SOME(lib);
 
-    Try<Role*> module =
+    Try<Role*> instance =
       callFunction<Role*>(lib.get(),
                           MESOS_CREATE_MODULE_FUNCTION_STRING(moduleName));
-    if (module.isError()) {
-      return Error(module.error());
+    if (instance.isError()) {
+      return Error(instance.error());
+    }
+
+    // This dynamic cast makes extra sure that we bind to a matching role type,
+    // even though this should already be assured given module version checks.
+    // As a side effect, this constrains role types to abstract classes
+    // with at least one virtual function, as only those are supported by RTTI.
+    Role* module = dynamic_cast<Role*>(instance.get());
+    if (module == NULL) {
+      return Error("Module " + moduleName + " failed dynamic type check");
     }
     return module;
   }
@@ -92,8 +101,8 @@ private:
     if (symbol.isError()) {
       return Error(symbol.error());
     }
-    T (*v)() = (T (*)()) symbol.get();
-    return (*v)();
+    T (*function)() = (T (*)()) symbol.get();
+    return (*function)();
   }
 
   hashmap<std::string, std::string> roleToVersion;
