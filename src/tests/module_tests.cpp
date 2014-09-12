@@ -20,7 +20,6 @@
 
 #include <mesos/module.hpp>
 
-#include "module/isolator_module.hpp"
 #include "module.hpp"
 
 #include "tests/flags.hpp"
@@ -46,8 +45,8 @@ TEST_F(ModuleTest, ExampleModuleTest)
           ) + ":example");
   EXPECT_SOME(result);
 
-  Try<memory::shared_ptr<TestModule> > module =
-    manager.loadModule("example");
+  Try<TestModule*> module =
+    manager.loadModule<TestModule>("example");
   EXPECT_SOME(module);
 
   EXPECT_EQ(module.get()->foo('A', 1024), 1089);

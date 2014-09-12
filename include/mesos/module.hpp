@@ -29,12 +29,17 @@
 #define MESOS_VERSION_FUNCTION mesos_get_version
 #define MESOS_MODULE_API_VERSION_FUNCTION mesos_get_module_api_version
 
+#define MESOS_GET_MODULE_ROLE_FUNCTION(name) mesos_get_role_##name
+#define MESOS_CREATE_MODULE_FUNCTION(name) mesos_create_module_##name
+
 #define MESOS_MODULE(role, name) \
   extern "C" const char* MESOS_VERSION_FUNCTION() { return MESOS_VERSION; } \
   extern "C" const char* MODULE_API_VERSION_FUNCTION() { \
     return MODULE_API_VERSION; \
   } \
-  extern "C" const char* get_##name##_role() { return #role; } \
-  extern "C" role* create_##name##_module()
+  extern "C" const char* MESOS_GET_MODULE_ROLE_FUNCTION(name) () { \
+    return #role; \
+  } \
+  extern "C" role* MESOS_CREATE_MODULE_FUNCTION(name) ()
 
 #endif // __MODULE_HPP__

@@ -86,15 +86,14 @@ public:
   }
 };
 
-} // namespace slave {
-} // namespace internal {
-} // namespace mesos {
-
-extern "C" {
-void* create_isolator_module(void *args) {
+MESOS_MODULE(Isolator, testIsolator)
+{
   process::Owned<mesos::internal::slave::IsolatorProcess> process(
       new mesos::internal::slave::TestIsolatorProcess);
   return new mesos::internal::slave::Isolator(process);
 }
-};
+
+} // namespace slave {
+} // namespace internal {
+} // namespace mesos {
 

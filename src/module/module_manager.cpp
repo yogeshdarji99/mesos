@@ -33,36 +33,18 @@ using std::vector;
 
 namespace mesos {
 
-#define STRINGIFY(x) #x
-#define MODULE_API_VERSION_FUNCTION_STRING \
-  STRINGIFY(MODULE_API_VERSION_FUNCTION)
-
-#define MESOS_VERSION_FUNCTION_STRING \
-  STRINGIFY(MESOS_VERSION_FUNCTION)
-
 ModuleManager::ModuleManager()
 {
-  roleToVersion["TestModule"]    = "0.22";
-  roleToVersion["Isolator"]      = "0.22";
-  roleToVersion["Authenticator"] = "0.22";
-  roleToVersion["Allocator"]     = "0.22";
+  roleToVersion["TestModule"]    = new MesosVersion("0.21.0");
+  roleToVersion["Isolator"]      = new MesosVersion("0.21.0");
+  roleToVersion["Authenticator"] = new MesosVersion("0.21.0");
+  roleToVersion["Allocator"]     = new MesosVersion("0.21.0");
 
 // mesos           library      result
 // 0.18(0.18)      0.18         FINE
 // 0.18(0.18)      0.19         NOT FINE
 // 0.19(0.18)      0.18         FINE
 // 0.19(0.19)      0.18         NOT FINE
-}
-
-template<typename T>
-static Try<T> callFunction(DynamicLibrary *lib, string functionName)
-{
-  Try<void*> symbol = lib->loadSymbol(functionName);
-  if (symbol.isError()) {
-    return Error(symbol.error());
-  }
-  T (*v)() = (T (*)()) symbol.get();
-  return (*v)();
 }
 
 Try<DynamicLibrary*> ModuleManager::loadModuleLibrary(string path)
@@ -73,42 +55,46 @@ Try<DynamicLibrary*> ModuleManager::loadModuleLibrary(string path)
     return Error(result.error());
   }
 
-  Try<string> apiVersion =
-    callFunction<string>(lib, MODULE_API_VERSION_FUNCTION_STRING);
-  if (apiVersion.isError()) {
-    return Error(apiVersion.error());
+  Try<const char*> apiVersionStr =
+    callFunction<const char*>(lib, MODULE_API_VERSION_FUNCTION_STRING);
+  if (apiVersionStr.isError()) {
+    return Error(apiVersionStr.error());
   }
-  if (apiVersion.get() != MODULE_API_VERSION) {
+  string apiVersion(apiVersionStr.get());
+  if (apiVersion != MODULE_API_VERSION) {
     return Error("Module API version mismatch. "
-                 "Mesos has: " MODULE_API_VERSION
-                 "library requires: " + apiVersion.get());
+                 "Mesos has: " MODULE_API_VERSION ", "
+                 "library requires: " + apiVersion);
   }
   return lib;
 }
 
 Try<Nothing> ModuleManager::verifyModuleRole(DynamicLibrary *lib, string module)
 {
-  Try<string> role = callFunction<string>(lib, "get" + module + "Role");
-  if (role.isError()) {
-    return Error(role.error());
+  Try<const char*> roleStr =
+    callFunction<const char*>(lib,
+                              MESOS_GET_MODULE_ROLE_FUNCTION_STRING(module));
+  if (roleStr.isError()) {
+    return Error(roleStr.error());
   }
-  if (!roleToVersion.contains(role.get())) {
-    return Error("Unknown module role: " + role.get());
-  }
-
-  Try<string> libraryMesosVersion =
-    callFunction<string>(lib, MESOS_VERSION_FUNCTION_STRING);
-  if (libraryMesosVersion.isError()) {
-    return Error(libraryMesosVersion.error());
+  string role(roleStr.get());
+  if (!roleToVersion.contains(role)) {
+    return Error("Unknown module role: " + role);
   }
 
-  if (numify<double>(libraryMesosVersion.get()).get() >=
-      numify<double>(roleToVersion[role.get()]).get()) {
-    return Error("Role version mismatch: " + role.get() +
+  Try<const char*> libraryMesosVersionStr =
+    callFunction<const char*>(lib, MESOS_VERSION_FUNCTION_STRING);
+  if (libraryMesosVersionStr.isError()) {
+    return Error(libraryMesosVersionStr.error());
+  }
+
+  MesosVersion libraryMesosVersion(libraryMesosVersionStr.get());
+  if (libraryMesosVersion < *roleToVersion[role]) {
+    return Error("Role version mismatch: " + role +
                  " supported by Mesos with version >=" +
-                 roleToVersion[role.get()] +
+                 roleToVersion[role]->str() +
                  ", but module is compiled with " +
-                 libraryMesosVersion.get());
+                 libraryMesosVersion.str());
   }
   return Nothing();
 }
@@ -135,20 +121,6 @@ Try<Nothing> ModuleManager::loadLibraries(string modulePaths)
     }
   }
   return Nothing();
-}
-
-template<typename Role>
-Try<Role*> ModuleManager::loadModule(std::string moduleName)
-{
-  Option<DynamicLibrary*> lib = moduleToDynamicLibrary[moduleName];
-  CHECK_SOME(lib);
-
-  Try<Role*> instance =
-      callFunction<Role*>(lib.get(), "create" + moduleName + "Instance");
-  if (instance.isError()) {
-    return Error(instance.error());
-  }
-  return instance;
 }
 
 } // namespace mesos {

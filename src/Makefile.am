@@ -406,6 +406,7 @@ libmesos_no_3rdparty_la_SOURCES +=					\
 	master/registrar.hpp						\
 	master/sorter.hpp						\
 	messages/messages.hpp						\
+	module/module_manager.hpp					\
 	slave/constants.hpp						\
 	slave/flags.hpp							\
 	slave/gc.hpp							\
