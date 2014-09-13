@@ -32,17 +32,20 @@
 #define MESOS_MODULE_API_VERSION_FUNCTION \
   mesos_get_module_api_version
 
+#define APPEND(a, b) a##b
+#define EXPAND_AND_APPEND(a, b) APPEND(a, b)
+
 #define MESOS_GET_MODULE_ROLE_ mesos_get_module_role_
 #define MESOS_GET_MODULE_ROLE_FUNCTION(identifier) \
-  MESOS_GET_MODULE_ROLE_##identifier
+  EXPAND_AND_APPEND(MESOS_GET_MODULE_ROLE_, identifier)
 
 #define MESOS_CREATE_MODULE mesos_create_module_
 #define MESOS_CREATE_MODULE_FUNCTION(identifier) \
-  MESOS_CREATE_MODULE_##identifier
+  EXPAND_AND_APPEND(MESOS_CREATE_MODULE_, identifier)
 
 #define MESOS_IS_MODULE_COMPATIBILE_ mesos_is_module_compatible_
 #define MESOS_IS_MODULE_COMPATIBILE_FUNCTION(identifier) \
-  MESOS_IS_MODULE_COMPATIBILE_##identifier
+  EXPAND_AND_APPEND(MESOS_IS_MODULE_COMPATIBILE_, identifier)
 
 #define MESOS_MODULE(role, identifier) \
   extern "C" const char* MESOS_VERSION_FUNCTION() { return MESOS_VERSION; } \
