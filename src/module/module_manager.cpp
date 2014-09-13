@@ -123,16 +123,18 @@ Try<Nothing> ModuleManager::verifyModuleRole(DynamicLibrary *lib, string module)
 
   Try<void*> symbol =
       lib->loadSymbol(MESOS_IS_MODULE_COMPATIBILE_FUNCTION_STRING(module));
-  bool allowingBackwardCompatibility = !symbol.isError();
-
-  if (libraryMesosVersion != instance()->roleToVersion[role] &&
-      !(allowingBackwardCompatibility &&
-        // TODO: Replace the '!=' check with '>=' check.
-        libraryMesosVersion != instance()->roleToVersion[role])) {
-    return Error("Role version mismatch: " + role +
-                 " supported by Mesos with version >=" +
-                 instance()->roleToVersion[role] +
-                 ", but module is compiled with " +
+  if (symbol.isError()) {
+    if (libraryMesosVersion != MESOS_VERSION) {
+      return Error("Mesos has version " + string(MESOS_VERSION) +
+                   ", but module is compiled with version " +
+                   libraryMesosVersion);
+    }
+    return Nothing();
+  }
+  // TODO: Replace the '!=' check with '>=' check against roleToVersion.
+  if (libraryMesosVersion != MESOS_VERSION) {
+    return Error("Mesos has version " + string(MESOS_VERSION) +
+                 ", but module is compiled with version " +
                  libraryMesosVersion);
   }
 
