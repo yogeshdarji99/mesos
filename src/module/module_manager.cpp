@@ -131,6 +131,7 @@ Try<Nothing> ModuleManager::verifyModuleRole(DynamicLibrary *lib, string module)
     }
     return Nothing();
   }
+
   // TODO: Replace the '!=' check with '>=' check against roleToVersion.
   if (libraryMesosVersion != MESOS_VERSION) {
     return Error("Mesos has version " + string(MESOS_VERSION) +
