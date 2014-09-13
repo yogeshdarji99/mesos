@@ -26,20 +26,35 @@
 
 #define MODULE_API_VERSION "1"
 
-#define MESOS_VERSION_FUNCTION mesos_get_version
-#define MESOS_MODULE_API_VERSION_FUNCTION mesos_get_module_api_version
+#define MESOS_VERSION_FUNCTION \
+  mesos_get_version
 
-#define MESOS_GET_MODULE_ROLE_FUNCTION(name) mesos_get_role_##name
-#define MESOS_CREATE_MODULE_FUNCTION(name) mesos_create_module_##name
+#define MESOS_MODULE_API_VERSION_FUNCTION \
+  mesos_get_module_api_version
 
-#define MESOS_MODULE(role, name) \
+#define MESOS_GET_MODULE_ROLE_ mesos_get_module_role_
+#define MESOS_GET_MODULE_ROLE_FUNCTION(identifier) \
+  MESOS_GET_MODULE_ROLE_##identifier
+
+#define MESOS_CREATE_MODULE mesos_create_module_
+#define MESOS_CREATE_MODULE_FUNCTION(identifier) \
+  MESOS_CREATE_MODULE_##identifier
+
+#define MESOS_IS_MODULE_COMPATIBILE_ mesos_is_module_compatible_
+#define MESOS_IS_MODULE_COMPATIBILE_FUNCTION(identifier) \
+  MESOS_IS_MODULE_COMPATIBILE_##identifier
+
+#define MESOS_MODULE(role, identifier) \
   extern "C" const char* MESOS_VERSION_FUNCTION() { return MESOS_VERSION; } \
   extern "C" const char* MODULE_API_VERSION_FUNCTION() { \
     return MODULE_API_VERSION; \
   } \
-  extern "C" const char* MESOS_GET_MODULE_ROLE_FUNCTION(name) () { \
+  extern "C" const char* MESOS_GET_MODULE_ROLE_FUNCTION(identifier)() { \
     return #role; \
   } \
-  extern "C" role* MESOS_CREATE_MODULE_FUNCTION(name) ()
+  extern "C" role* MESOS_CREATE_MODULE_FUNCTION(identifier)()
+
+#define MESOS_MODULE_IS_COMPATIBILE(identifier) \
+  extern "C" bool MESOS_MODULE_COMPATIBILITY_FUNCTION(identifier)()
 
 #endif // __MODULE_HPP__

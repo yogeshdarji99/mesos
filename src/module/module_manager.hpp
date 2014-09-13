@@ -35,10 +35,13 @@
   EXPAND_AND_STRINGIFY(MESOS_VERSION_FUNCTION)
 
 #define MESOS_GET_MODULE_ROLE_FUNCTION_STRING(moduleName) \
-  "mesos_get_role_" + moduleName
+  (EXPAND_AND_STRINGIFY(MESOS_GET_MODULE_ROLE_) + moduleName)
 
 #define MESOS_CREATE_MODULE_FUNCTION_STRING(moduleName) \
-  "mesos_create_module_" + moduleName
+  (EXPAND_AND_STRINGIFY(MESOS_CREATE_MODULE_) + moduleName)
+
+#define MESOS_IS_MODULE_COMPATIBILE_FUNCTION_STRING(moduleName) \
+  (EXPAND_AND_STRINGIFY(MESOS_IS_MODULE_COMPATIBILE_) + moduleName)
 
 namespace mesos {
 namespace internal {

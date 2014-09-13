@@ -37,4 +37,3 @@ MESOS_MODULE(TestModule, example)
 {
   return new ExampleModule();
 }
-

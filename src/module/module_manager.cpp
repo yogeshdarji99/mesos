@@ -103,32 +103,49 @@ Try<DynamicLibrary*> ModuleManager::loadModuleLibrary(string path)
 
 Try<Nothing> ModuleManager::verifyModuleRole(DynamicLibrary *lib, string module)
 {
-  Try<const char*> roleStr =
+  Try<const char*> r =
     callFunction<const char*>(lib,
                               MESOS_GET_MODULE_ROLE_FUNCTION_STRING(module));
-  if (roleStr.isError()) {
-    return Error(roleStr.error());
+  if (r.isError()) {
+    return Error(r.error());
   }
-  string role(roleStr.get());
+  string role(r.get());
   if (!instance()->roleToVersion.contains(role)) {
     return Error("Unknown module role: " + role);
   }
 
-  Try<const char*> libraryMesosVersionStr =
+  Try<const char*> v =
     callFunction<const char*>(lib, MESOS_VERSION_FUNCTION_STRING);
-  if (libraryMesosVersionStr.isError()) {
-    return Error(libraryMesosVersionStr.error());
+  if (v.isError()) {
+    return Error(v.error());
   }
-  string libraryMesosVersion(libraryMesosVersionStr.get());
+  string libraryMesosVersion(v.get());
 
-  // TODO: Replace the '!=' check with '<' check.
-  if (libraryMesosVersion != instance()->roleToVersion[role]) {
+  Try<void*> symbol =
+      lib->loadSymbol(MESOS_IS_MODULE_COMPATIBILE_FUNCTION_STRING(module));
+  bool allowingBackwardCompatibility = !symbol.isError();
+
+  if (libraryMesosVersion != instance()->roleToVersion[role] &&
+      !(allowingBackwardCompatibility &&
+        // TODO: Replace the '!=' check with '>=' check.
+        libraryMesosVersion != instance()->roleToVersion[role])) {
     return Error("Role version mismatch: " + role +
                  " supported by Mesos with version >=" +
                  instance()->roleToVersion[role] +
                  ", but module is compiled with " +
                  libraryMesosVersion);
   }
+
+  Try<bool> result =
+    callFunction<bool>(lib,
+        MESOS_IS_MODULE_COMPATIBILE_FUNCTION_STRING(module));
+  if (result.isError()) {
+    return Error(result.error());
+  }
+  if (!result.get()) {
+    return Error("Module " + module + "has determined to be incompatible");
+  }
+
   return Nothing();
 }
 
