@@ -67,12 +67,12 @@ ModuleManager::ModuleManager()
 // Here are some examples:
 //
 // Mesos   roleToVersion    library    modules loadable?
-// 0.18        0.18          0.18           YES
-// 0.29        0.18          0.18           YES
-// 0.29        0.18          0.21           YES
-// 0.18        0.18          0.29           NO
-// 0.29        0.21          0.18           NO
-// 0.29        0.29          0.18           NO
+// 0.18.0      0.18.0       0.18.0          YES
+// 0.29.0      0.18.0       0.18.0          YES
+// 0.29.0      0.18.0       0.21.0          YES
+// 0.18.0      0.18.0       0.29.0          NO
+// 0.29.0      0.21.0       0.18.0          NO
+// 0.29.0      0.29.0       0.18.0          NO
 
 // ATTENTION: This mechanism only protects the interfaces of modules, not how
 // they maintain functional compatibility with Mesos and among each other.

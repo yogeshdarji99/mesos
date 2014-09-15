@@ -88,9 +88,8 @@ public:
 
 MESOS_MODULE(Isolator, testIsolator)
 {
-  process::Owned<mesos::internal::slave::IsolatorProcess> process(
-      new mesos::internal::slave::TestIsolatorProcess);
-  return new mesos::internal::slave::Isolator(process);
+  process::Owned<IsolatorProcess> process(new TestIsolatorProcess);
+  return new Isolator(process);
 }
 
 } // namespace slave {
