@@ -19,6 +19,8 @@
 #include <mesos/module.hpp>
 #include <tests/module.hpp>
 
+MESOS_MODULE_LIBRARY();
+
 class ExampleModule : public TestModule
 {
 public:

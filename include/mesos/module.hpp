@@ -19,12 +19,14 @@
 #ifndef __MODULE_HPP__
 #define __MODULE_HPP__
 
-#include <string>
 #include <mesos/mesos.hpp>
+
+#define APPEND(a, b) a##b
+#define EXPAND_AND_APPEND(a, b) APPEND(a, b)
 
 // Module implementation utilities:
 
-#define MODULE_API_VERSION "1"
+#define MESOS_MODULE_API_VERSION "1"
 
 #define MESOS_VERSION_FUNCTION \
   mesos_get_version
@@ -32,8 +34,11 @@
 #define MESOS_MODULE_API_VERSION_FUNCTION \
   mesos_get_module_api_version
 
-#define APPEND(a, b) a##b
-#define EXPAND_AND_APPEND(a, b) APPEND(a, b)
+#define MESOS_MODULE_LIBRARY() \
+  extern "C" const char* MESOS_VERSION_FUNCTION() { return MESOS_VERSION; } \
+  extern "C" const char* MESOS_MODULE_API_VERSION_FUNCTION() { \
+    return MESOS_MODULE_API_VERSION; \
+  }
 
 #define MESOS_GET_MODULE_ROLE_ mesos_get_module_role_
 #define MESOS_GET_MODULE_ROLE_FUNCTION(identifier) \
@@ -48,10 +53,6 @@
   EXPAND_AND_APPEND(MESOS_IS_MODULE_COMPATIBILE_, identifier)
 
 #define MESOS_MODULE(role, identifier) \
-  extern "C" const char* MESOS_VERSION_FUNCTION() { return MESOS_VERSION; } \
-  extern "C" const char* MODULE_API_VERSION_FUNCTION() { \
-    return MODULE_API_VERSION; \
-  } \
   extern "C" const char* MESOS_GET_MODULE_ROLE_FUNCTION(identifier)() { \
     return #role; \
   } \

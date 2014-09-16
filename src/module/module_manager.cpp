@@ -88,14 +88,14 @@ Try<DynamicLibrary*> ModuleManager::loadModuleLibrary(string path)
   }
 
   Try<const char*> apiVersionStr =
-    callFunction<const char*>(lib, MODULE_API_VERSION_FUNCTION_STRING);
+    callFunction<const char*>(lib, MESOS_MODULE_API_VERSION_FUNCTION_STRING);
   if (apiVersionStr.isError()) {
     return Error(apiVersionStr.error());
   }
   string apiVersion(apiVersionStr.get());
-  if (apiVersion != MODULE_API_VERSION) {
+  if (apiVersion != MESOS_MODULE_API_VERSION) {
     return Error("Module API version mismatch. "
-                 "Mesos has: " MODULE_API_VERSION ", "
+                 "Mesos has: " MESOS_MODULE_API_VERSION ", "
                  "library requires: " + apiVersion);
   }
   return lib;
