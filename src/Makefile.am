@@ -273,6 +273,7 @@ libmesos_no_3rdparty_la_SOURCES =					\
 	master/registry.proto                                           \
 	master/registrar.cpp						\
 	master/repairer.cpp						\
+	module/module_manager.cpp					\
 	sasl/authenticatee.hpp						\
 	sasl/authenticator.hpp						\
 	sasl/auxprop.hpp						\
@@ -309,6 +310,7 @@ pkginclude_HEADERS =							\
   $(top_srcdir)/include/mesos/scheduler.hpp				\
   $(top_srcdir)/include/mesos/resources.hpp				\
   $(top_srcdir)/include/mesos/values.hpp				\
+  $(top_srcdir)/include/mesos/module.hpp				\
   $(top_srcdir)/include/mesos/mesos.proto
 
 nodist_pkginclude_HEADERS =						\
@@ -413,6 +415,7 @@ libmesos_no_3rdparty_la_SOURCES +=					\
 	master/registrar.hpp						\
 	master/sorter.hpp						\
 	messages/messages.hpp						\
+	module/module_manager.hpp					\
 	slave/constants.hpp						\
 	slave/flags.hpp							\
 	slave/gc.hpp							\
@@ -1076,6 +1079,11 @@ load_generator_framework_LDADD = libmesos.la
 
 check_PROGRAMS += mesos-tests
 
+lib_LTLIBRARIES += libtest.la
+libtest_la_SOURCES = examples/test_module.cpp
+libtest_la_CPPFLAGS = $(MESOS_CPPFLAGS)
+libtest_la_LDFLAGS = -release $(PACKAGE_VERSION) -shared
+
 mesos_tests_SOURCES =				\
   tests/allocator_tests.cpp			\
   tests/attributes_tests.cpp			\
@@ -1104,6 +1112,7 @@ mesos_tests_SOURCES =				\
   tests/master_contender_detector_tests.cpp	\
   tests/master_tests.cpp			\
   tests/mesos.cpp				\
+  tests/module_tests.cpp			\
   tests/monitor_tests.cpp			\
   tests/paths_tests.cpp				\
   tests/protobuf_io_tests.cpp			\
@@ -1133,7 +1142,7 @@ mesos_tests_CPPFLAGS += -DBUILD_DIR=\"$(abs_top_builddir)\"
 mesos_tests_CPPFLAGS += -I../$(GTEST)/include
 mesos_tests_CPPFLAGS += -I../$(GMOCK)/include
 
-mesos_tests_LDADD = ../$(LIBPROCESS)/3rdparty/libgmock.la libmesos.la
+mesos_tests_LDADD = ../$(LIBPROCESS)/3rdparty/libgmock.la libmesos.la -ldl
 
 mesos_tests_DEPENDENCIES = # Initialized to allow += below.
 
