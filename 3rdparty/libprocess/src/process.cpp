@@ -371,8 +371,8 @@ static uint32_t __ip__ = 0;
 // Local port.
 static uint16_t __port__ = 0;
 
-// Active SocketManager (eventually will probably be thread-local).
-static SocketManager* socket_manager = NULL;
+// Active EventManager (eventually will probably be thread-local).
+static EventManager* event_manager = NULL;
 
 // Active ProcessManager (eventually will probably be thread-local).
 static ProcessManager* process_manager = NULL;
@@ -643,7 +643,7 @@ static void transport(Message* message, ProcessBase* sender = NULL)
     process_manager->deliver(message->to, new MessageEvent(message), sender);
   } else {
     // Remote message.
-    socket_manager->send(message);
+    event_manager->send(message);
   }
 }
 
@@ -912,7 +912,7 @@ void recv_data(struct ev_loop* loop, ev_io* watcher, int revents)
       } else {
         VLOG(2) << "Socket closed while receiving";
       }
-      socket_manager->close(s);
+      event_manager->close(s);
       delete decoder;
       ev_io_stop(loop, watcher);
       delete watcher;
@@ -929,7 +929,7 @@ void recv_data(struct ev_loop* loop, ev_io* watcher, int revents)
         }
       } else if (requests.empty() && decoder->failed()) {
         VLOG(1) << "Decoder error while receiving";
-        socket_manager->close(s);
+        event_manager->close(s);
         delete decoder;
         ev_io_stop(loop, watcher);
         delete watcher;
@@ -973,7 +973,7 @@ void ignore_data(struct ev_loop* loop, ev_io* watcher, int revents)
       } else {
         VLOG(2) << "Socket closed while receiving";
       }
-      socket_manager->close(s);
+      event_manager->close(s);
       ev_io_stop(loop, watcher);
       delete socket;
       delete watcher;
@@ -1017,7 +1017,7 @@ void send_data(struct ev_loop* loop, ev_io* watcher, int revents)
       } else {
         VLOG(1) << "Socket closed while sending";
       }
-      socket_manager->close(s);
+      event_manager->close(s);
       delete encoder;
       ev_io_stop(loop, watcher);
       delete watcher;
@@ -1036,7 +1036,7 @@ void send_data(struct ev_loop* loop, ev_io* watcher, int revents)
         ev_io_stop(loop, watcher);
 
         // Check for more stuff to send on socket.
-        Encoder* next = socket_manager->next(s);
+        Encoder* next = event_manager->next(s);
         if (next != NULL) {
           watcher->data = next;
           ev_io_init(watcher, next->sender(), s, EV_WRITE);
@@ -1084,7 +1084,7 @@ void send_file(struct ev_loop* loop, ev_io* watcher, int revents)
       } else {
         VLOG(1) << "Socket closed while sending";
       }
-      socket_manager->close(s);
+      event_manager->close(s);
       delete encoder;
       ev_io_stop(loop, watcher);
       delete watcher;
@@ -1103,7 +1103,7 @@ void send_file(struct ev_loop* loop, ev_io* watcher, int revents)
         ev_io_stop(loop, watcher);
 
         // Check for more stuff to send on socket.
-        Encoder* next = socket_manager->next(s);
+        Encoder* next = event_manager->next(s);
         if (next != NULL) {
           watcher->data = next;
           ev_io_init(watcher, next->sender(), s, EV_WRITE);
@@ -1130,7 +1130,7 @@ void sending_connect(struct ev_loop* loop, ev_io* watcher, int revents)
   if (getsockopt(s, SOL_SOCKET, SO_ERROR, &opt, &optlen) < 0 || opt != 0) {
     // Connect failure.
     VLOG(1) << "Socket error while connecting";
-    socket_manager->close(s);
+    event_manager->close(s);
     MessageEncoder* encoder = (MessageEncoder*) watcher->data;
     delete encoder;
     ev_io_stop(loop, watcher);
@@ -1155,7 +1155,7 @@ void receiving_connect(struct ev_loop* loop, ev_io* watcher, int revents)
   if (getsockopt(s, SOL_SOCKET, SO_ERROR, &opt, &optlen) < 0 || opt != 0) {
     // Connect failure.
     VLOG(1) << "Socket error while connecting";
-    socket_manager->close(s);
+    event_manager->close(s);
     Socket* socket = (Socket*) watcher->data;
     delete socket;
     ev_io_stop(loop, watcher);
@@ -1206,7 +1206,7 @@ void accept(struct ev_loop* loop, ev_io* watcher, int revents)
     os::close(s);
   } else {
     // Inform the socket manager for proper bookkeeping.
-    const Socket& socket = socket_manager->accepted(s);
+    const Socket& socket = event_manager->accepted(s);
 
     // Allocate and initialize the decoder and watcher.
     DataDecoder* decoder = new DataDecoder(socket);
@@ -1380,7 +1380,7 @@ void initialize(const string& delegate)
 
   // Create a new ProcessManager and SocketManager.
   process_manager = new ProcessManager(delegate);
-  socket_manager = new SocketManager();
+  event_manager = new SocketManager();
 
   // Setup processing threads.
   // We create no fewer than 8 threads because some tests require
@@ -2156,7 +2156,7 @@ bool ProcessManager::handle(
       bool accepted = deliver(message->to, new MessageEvent(message));
 
       // Get the HttpProxy pid for this socket.
-      PID<HttpProxy> proxy = socket_manager->proxy(socket);
+      PID<HttpProxy> proxy = event_manager->proxy(socket);
 
       // Only send back an HTTP response if this isn't from libprocess
       // (which we determine by looking at the User-Agent). This is
@@ -2195,7 +2195,7 @@ bool ProcessManager::handle(
     VLOG(1) << "Returning '400 Bad Request' for '" << request->path << "'";
 
     // Get the HttpProxy pid for this socket.
-    PID<HttpProxy> proxy = socket_manager->proxy(socket);
+    PID<HttpProxy> proxy = event_manager->proxy(socket);
 
     // Enqueue the response with the HttpProxy so that it respects the
     // order of requests to account for HTTP/1.1 pipelining.
@@ -2212,7 +2212,7 @@ bool ProcessManager::handle(
             << "' (ignoring requests with relative paths)";
 
     // Get the HttpProxy pid for this socket.
-    PID<HttpProxy> proxy = socket_manager->proxy(socket);
+    PID<HttpProxy> proxy = event_manager->proxy(socket);
 
     // Enqueue the response with the HttpProxy so that it respects the
     // order of requests to account for HTTP/1.1 pipelining.
@@ -2258,7 +2258,7 @@ bool ProcessManager::handle(
   VLOG(1) << "Returning '404 Not Found' for '" << request->path << "'";
 
   // Get the HttpProxy pid for this socket.
-  PID<HttpProxy> proxy = socket_manager->proxy(socket);
+  PID<HttpProxy> proxy = event_manager->proxy(socket);
 
   // Enqueue the response with the HttpProxy so that it respects the
   // order of requests to account for HTTP/1.1 pipelining.
@@ -2541,8 +2541,8 @@ void ProcessManager::cleanup(ProcessBase* process)
     // removed from processes thus getting an exited event but we
     // don't want that exited event to fire and actually delete the
     // process until after we have used the process in
-    // SocketManager::exited).
-    socket_manager->exited(process);
+    // EventManager::exited).
+    event_manager->exited(process);
 
     // ***************************************************************
     // At this point we can no longer dereference the process since it
@@ -2565,13 +2565,13 @@ void ProcessManager::link(ProcessBase* process, const UPID& to)
 {
   // Check if the pid is local.
   if (!(to.ip == __ip__ && to.port == __port__)) {
-    socket_manager->link(process, to);
+    event_manager->link(process, to);
   } else {
     // Since the pid is local we want to get a reference to it's
     // underlying process so that while we are invoking the link
     // manager we don't miss sending a possible ExitedEvent.
     if (ProcessReference _ = use(to)) {
-      socket_manager->link(process, to);
+      event_manager->link(process, to);
     } else {
       // Since the pid isn't valid it's process must have already died
       // (or hasn't been spawned yet) so send a process exit message.
@@ -3039,7 +3039,7 @@ void ProcessBase::visit(const HttpEvent& event)
     Future<Response>* future = new Future<Response>(promise->future());
 
     // Get the HttpProxy pid for this socket.
-    PID<HttpProxy> proxy = socket_manager->proxy(event.socket);
+    PID<HttpProxy> proxy = event_manager->proxy(event.socket);
 
     // Let the HttpProxy know about this request (via the future).
     dispatch(proxy, &HttpProxy::handle, future, *event.request);
@@ -3073,7 +3073,7 @@ void ProcessBase::visit(const HttpEvent& event)
     // just let the browser guess (or do it's own default).
 
     // Get the HttpProxy pid for this socket.
-    PID<HttpProxy> proxy = socket_manager->proxy(event.socket);
+    PID<HttpProxy> proxy = event_manager->proxy(event.socket);
 
     // Enqueue the response with the HttpProxy so that it respects the
     // order of requests to account for HTTP/1.1 pipelining.
@@ -3082,7 +3082,7 @@ void ProcessBase::visit(const HttpEvent& event)
     VLOG(1) << "Returning '404 Not Found' for '" << event.request->path << "'";
 
     // Get the HttpProxy pid for this socket.
-    PID<HttpProxy> proxy = socket_manager->proxy(event.socket);
+    PID<HttpProxy> proxy = event_manager->proxy(event.socket);
 
     // Enqueue the response with the HttpProxy so that it respects the
     // order of requests to account for HTTP/1.1 pipelining.
