@@ -33,8 +33,11 @@ libprocess_la_SOURCES =		\
   src/config.hpp		\
   src/decoder.hpp		\
   src/encoder.hpp		\
+  src/event_manager.hpp		\
+  src/event_manager_base.hpp	\
   src/gate.hpp			\
   src/http.cpp			\
+  src/http_proxy.cpp		\
   src/latch.cpp			\
   src/metrics/metrics.cpp	\
   src/pid.cpp			\
