@@ -196,24 +196,24 @@ public:
   SocketManager();
   virtual ~SocketManager();
 
-  Socket accepted(int s);
+  virtual Socket accepted(int s) override;
 
-  void link(ProcessBase* process, const UPID& to);
+  virtual void link(ProcessBase* process, const UPID& to) override;
 
-  PID<HttpProxy> proxy(const Socket& socket);
+  virtual PID<HttpProxy> proxy(const Socket& socket) override;
 
   virtual void send(Encoder* encoder, bool persist) override;
   virtual void send(const Response& response,
             const Request& request,
             const Socket& socket) override;
-  void send(Message* message);
+  virtual void send(Message* message) override;
 
-  Encoder* next(int s);
+  virtual Encoder* next(int s) override;
 
-  void close(int s);
+  virtual void close(int s) override;
 
-  void exited(const Node& node);
-  void exited(ProcessBase* process);
+  virtual void exited(const Node& node) override;
+  virtual void exited(ProcessBase* process) override;
 
 private:
   // Map from UPID (local/remote) to process.
