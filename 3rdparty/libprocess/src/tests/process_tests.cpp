@@ -1892,3 +1892,78 @@ TEST(Process, PercentEncodedURLs)
   terminate(process);
   wait(process);
 }
+
+
+class BenchmarkProcess : public Process<BenchmarkProcess>
+{
+public:
+  BenchmarkProcess(const Option<PID<BenchmarkProcess>>& _other =
+      Option<PID<BenchmarkProcess>>())
+      : other(_other) {}
+
+  virtual void initialize()
+  {
+    route("/trigger", None(), &Self::trigger);
+    route("/pingpong", None(), &Self::pingpong);
+  }
+
+  Future<http::Response> pingpong(const http::Request& req) {
+    return http::OK("pong");
+  }
+
+  Future<http::Response> trigger(const http::Request& req) {
+    EXPECT_TRUE(other.isSome());
+    LOG(INFO) << "in trigger";
+    Stopwatch watch;
+    watch.start();
+    std::list<Future<http::Response>> outstanding_reqs;
+    size_t count = 0;
+    for (size_t i = 0; i < 3000; ++i) {
+#if 0
+      if (outstanding_reqs.size() > 0) {
+        const Future<http::Response>& front = outstanding_reqs.front();
+        front.get();
+        outstanding_reqs.pop_front();
+      }
+#endif
+      outstanding_reqs.push_back(http::get(other.get(), "pingpong"));
+    }
+    auto f = collect(outstanding_reqs);
+    f.get();
+#if 0
+    while (!outstanding_reqs.empty()) {
+      const Future<http::Response>& front = outstanding_reqs.front();
+      front.get();
+      outstanding_reqs.pop_front();
+    }
+#endif
+    LOG(INFO) << "finished trigger in " << watch.elapsed();
+    return http::OK("hi");
+  }
+
+private:
+
+  Option<PID<BenchmarkProcess>> other;
+
+};
+
+
+TEST(Process, Process_BENCHMARK_Test)
+{
+  BenchmarkProcess process1;
+  PID<BenchmarkProcess> pid1 = spawn(&process1);
+
+  BenchmarkProcess process2(pid1);
+  PID<BenchmarkProcess> pid2 = spawn(&process2);
+
+  // Now an HTTP request.
+  Future<http::Response> response = http::get(pid2, "trigger");
+
+  AWAIT_READY_FOR(response, Seconds(100));
+  EXPECT_EQ(http::statuses[200], response.get().status);
+
+  terminate(process1);
+  terminate(process2);
+  wait(process1);
+  wait(process2);
+}
