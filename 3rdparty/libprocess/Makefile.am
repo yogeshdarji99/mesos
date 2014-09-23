@@ -39,6 +39,8 @@ libprocess_la_SOURCES =		\
   src/http.cpp			\
   src/http_proxy.cpp		\
   src/latch.cpp			\
+  src/libev_event_manager.cpp	\
+  src/libev_event_manager.hpp	\
   src/metrics/metrics.cpp	\
   src/pid.cpp			\
   src/process.cpp		\

@@ -185,7 +185,7 @@ protected:
   }
 
 private:
-  friend class SocketManager;
+  friend class EventManager;
   friend class ProcessManager;
   friend class ProcessReference;
   friend void* schedule(void*);
