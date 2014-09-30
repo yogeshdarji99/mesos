@@ -15,29 +15,24 @@
 #include <stout/numify.hpp>
 #include <stout/os.hpp>
 
-// NOTE: We forward declare "ev_loop" and "ev_io" here because,
-// on OSX, including "ev.h" causes conflict with "EV_ERROR" declared
-// in "/usr/include/sys/event.h".
-struct ev_loop;
-struct ev_io;
-
 namespace process {
 
 const uint32_t GZIP_MINIMUM_BODY_LENGTH = 1024;
-
-typedef void (*Sender)(struct ev_loop*, ev_io*, int);
-
-extern void send_data(struct ev_loop*, ev_io*, int);
-extern void send_file(struct ev_loop*, ev_io*, int);
 
 
 class Encoder
 {
 public:
+  enum IOKind
+  {
+    send_data,
+    send_file
+  };
+
   explicit Encoder(const Socket& _s) : s(_s) {}
   virtual ~Encoder() {}
 
-  virtual Sender sender() = 0;
+  virtual IOKind io_kind() = 0;
 
   Socket socket() const
   {
@@ -57,7 +52,7 @@ public:
 
   virtual ~DataEncoder() {}
 
-  virtual Sender sender()
+  virtual IOKind io_kind()
   {
     return send_data;
   }
@@ -235,7 +230,7 @@ public:
     os::close(fd);
   }
 
-  virtual Sender sender()
+  virtual IOKind io_kind()
   {
     return send_file;
   }

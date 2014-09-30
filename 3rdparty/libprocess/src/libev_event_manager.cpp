@@ -162,6 +162,26 @@ static bool update_timer_flag = false;
 // the timeouts lock. This is only used when the clock is paused.
 static bool pending_timers = false;
 
+typedef void (*Sender)(struct ev_loop*, ev_io*, int);
+
+void send_data(struct ev_loop*, ev_io*, int);
+void send_file(struct ev_loop*, ev_io*, int);
+
+Sender get_send_function(Encoder::IOKind kind) {
+  switch (kind) {
+    case Encoder::send_data: {
+      return send_data;
+    }
+    case Encoder::send_file: {
+      return send_file;
+    }
+    default: {
+      std::cerr << "Unhandled Encoder IOKind" << std::endl;
+      abort();
+    }
+  }
+}
+
 // Wrapper around function we want to run in the event loop.
 template <typename T>
 void _run_in_event_loop(
@@ -494,7 +514,7 @@ void send_data(struct ev_loop* loop, ev_io* watcher, int revents)
         Encoder* next = LibevMan->next(s);
         if (next != NULL) {
           watcher->data = next;
-          ev_io_init(watcher, next->sender(), s, EV_WRITE);
+          ev_io_init(watcher, get_send_function(next->io_kind()), s, EV_WRITE);
           ev_io_start(loop, watcher);
         } else {
           // Nothing more to send right now, clean up.
@@ -561,7 +581,7 @@ void send_file(struct ev_loop* loop, ev_io* watcher, int revents)
         Encoder* next = LibevMan->next(s);
         if (next != NULL) {
           watcher->data = next;
-          ev_io_init(watcher, next->sender(), s, EV_WRITE);
+          ev_io_init(watcher, get_send_function(next->io_kind()), s, EV_WRITE);
           ev_io_start(loop, watcher);
         } else {
           // Nothing more to send right now, clean up.
@@ -869,7 +889,11 @@ void LibevEventManager::send(Encoder* encoder, bool persist)
         ev_io* watcher = new ev_io();
         watcher->data = encoder;
 
-        ev_io_init(watcher, encoder->sender(), encoder->socket(), EV_WRITE);
+        ev_io_init(
+            watcher,
+            get_send_function(encoder->io_kind()),
+            encoder->socket(),
+            EV_WRITE);
 
         synchronized (watchers) {
           watchers->push(watcher);
