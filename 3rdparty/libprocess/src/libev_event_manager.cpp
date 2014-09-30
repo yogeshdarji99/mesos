@@ -40,7 +40,7 @@ public:
 
   virtual double get_time() const override;
 
-  virtual Socket accepted(int s) override;
+  Socket accepted(int s);
 
   virtual void link(ProcessBase* process, const UPID& to) override;
 
@@ -52,11 +52,11 @@ public:
             const Socket& socket) override;
   virtual void send(Message* message) override;
 
-  virtual Encoder* next(int s) override;
+  Encoder* next(int s);
 
-  virtual void close(int s) override;
+  void close(int s);
 
-  virtual void exited(const Node& node) override;
+  void exited(const Node& node);
   virtual void exited(ProcessBase* process) override;
 
   virtual bool has_pending_timers() const override;

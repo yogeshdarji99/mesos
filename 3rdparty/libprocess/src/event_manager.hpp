@@ -14,6 +14,10 @@ class EventManager : public internal::EventManager
 {
 public:
 
+  /* A dependency injection of ProcessManager. This exposes just the
+   * behavior that the EventManager cares about:
+   *   - The ability to talk about a Process.
+   *   - The ability to dispatch a request to be run. */
   class ProcessManager
   {
   protected:
@@ -22,8 +26,10 @@ public:
   public:
     virtual ~ProcessManager() {}
 
+    /* Return a reference counted handle to the given process. */
     virtual ProcessReference use(const UPID& pid) = 0;
 
+    /* Handle the given request for this socket. */
     virtual bool handle(
         const Socket& socket,
         http::Request* request) = 0;
@@ -42,31 +48,51 @@ public:
    * above. */
   inline const UPID &get_pid(ProcessBase* process) const;
 
-  // TODO(benh): ev_time() versus ev_now() in libev?
-  virtual double get_time() const = 0;
-
+  /* A hook for initializing required state to run this manager. For
+   * example initializing event loops. */
   virtual void initialize() = 0;
 
-  virtual Socket accepted(int s) = 0;
+  /* Functions from original SocketManager. These are used by
+   * ProcessManager to implement delivery of messages. */
 
+  /* Establish a persistent connection between the given process and
+   * the process represented by the UPID to. This is one way
+   * connection from process -> to. See process::link() for more
+   * details. */
   virtual void link(ProcessBase* process, const UPID& to) = 0;
 
+  /* Return a handle to the HttpProxy representing the connection on
+   * the given socket. */
   virtual PID<HttpProxy> proxy(const Socket& socket) = 0;
 
+  /* Send the given message to the remote host identified in the
+   * message. */
   virtual void send(Message* message) = 0;
 
-  virtual Encoder* next(int s) = 0;
-
-  virtual void close(int s) = 0;
-
-  virtual void exited(const Node& node) = 0;
+  /* Created exited events for linked processes. See usage in
+   * ProcessManager */
   virtual void exited(ProcessBase* process) = 0;
 
+  /* Functions related to timer behavior. This behavior is usually
+   * associated with io event managers as they can block indefinitely
+   * for IO, and timers are used to set time-outs on waiting. */
+
+  // Return the current time.
+  virtual double get_time() const = 0;
+
+  // Return true if there are pending timers that need to be executed.
   virtual bool has_pending_timers() const = 0;
 
+  // Update the timer on async interrupt.
   virtual void update_timer() = 0;
 
+  /* Update the timer on async interrupt iff it is not already set to
+   * do so. */
   virtual void try_update_timer() = 0;
+
+  /* Functions coming from process/io.hpp. The following are pure
+   * virtuals that provide a nice hook for implementing each of
+   * these functions in a clean way. */
 
   // see process/io.hpp
   virtual Future<short> poll(int fd, short events) = 0;
