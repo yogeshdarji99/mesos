@@ -19,7 +19,9 @@ namespace process {
 class HttpProxy : public Process<HttpProxy>
 {
 public:
-  explicit HttpProxy(const Socket& _socket, internal::EventManager* _ev_man);
+  explicit HttpProxy(
+      const ConnectionHandle& _connection_handle,
+      internal::EventManager* _ev_man);
   virtual ~HttpProxy();
 
   // Enqueues the response to be sent once all previously enqueued
@@ -46,7 +48,8 @@ private:
   // Handles stream (i.e., pipe) based responses.
   void stream(const Future<short>& poll, const http::Request& request);
 
-  Socket socket; // Wrap the socket to keep it from getting closed.
+  // Copy the handle to keep the connection from getting destroyed.
+  const ConnectionHandle connection_handle;
 
   internal::EventManager* ev_man;
 

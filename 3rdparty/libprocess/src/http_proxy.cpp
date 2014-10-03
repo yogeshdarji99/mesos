@@ -15,9 +15,11 @@ using std::stringstream;
 
 namespace process {
 
-HttpProxy::HttpProxy(const Socket& _socket, internal::EventManager* _ev_man)
+HttpProxy::HttpProxy(
+    const ConnectionHandle& _connection_handle,
+    internal::EventManager* _ev_man)
   : ProcessBase(ID::generate("__http__")),
-    socket(_socket),
+    connection_handle(_connection_handle),
     ev_man(_ev_man) {}
 
 
@@ -98,7 +100,7 @@ bool HttpProxy::process(const Future<Response>& future, const Request& request)
   if (!future.isReady()) {
     // TODO(benh): Consider handling other "states" of future
     // (discarded, failed, etc) with different HTTP statuses.
-    ev_man->send(ServiceUnavailable(), request, socket);
+    ev_man->send(ServiceUnavailable(), request, connection_handle);
     return true; // All done, can process next response.
   }
 
@@ -115,21 +117,21 @@ bool HttpProxy::process(const Future<Response>& future, const Request& request)
     if (fd < 0) {
       if (errno == ENOENT || errno == ENOTDIR) {
           VLOG(1) << "Returning '404 Not Found' for path '" << path << "'";
-          ev_man->send(NotFound(), request, socket);
+          ev_man->send(NotFound(), request, connection_handle);
       } else {
         const char* error = strerror(errno);
         VLOG(1) << "Failed to send file at '" << path << "': " << error;
-        ev_man->send(InternalServerError(), request, socket);
+        ev_man->send(InternalServerError(), request, connection_handle);
       }
     } else {
       struct stat s; // Need 'struct' because of function named 'stat'.
       if (fstat(fd, &s) != 0) {
         const char* error = strerror(errno);
         VLOG(1) << "Failed to send file at '" << path << "': " << error;
-        ev_man->send(InternalServerError(), request, socket);
+        ev_man->send(InternalServerError(), request, connection_handle);
       } else if (S_ISDIR(s.st_mode)) {
         VLOG(1) << "Returning '404 Not Found' for directory '" << path << "'";
-        ev_man->send(NotFound(), request, socket);
+        ev_man->send(NotFound(), request, connection_handle);
       } else {
         // While the user is expected to properly set a 'Content-Type'
         // header, we fill in (or overwrite) 'Content-Length' header.
@@ -138,7 +140,7 @@ bool HttpProxy::process(const Future<Response>& future, const Request& request)
         response.headers["Content-Length"] = out.str();
 
         if (s.st_size == 0) {
-          ev_man->send(response, request, socket);
+          ev_man->send(response, request, connection_handle);
           return true; // All done, can process next request.
         }
 
@@ -147,12 +149,12 @@ bool HttpProxy::process(const Future<Response>& future, const Request& request)
         // TODO(benh): Consider a way to have the socket manager turn
         // on TCP_CORK for both sends and then turn it off.
         ev_man->send(
-            new HttpResponseEncoder(socket, response, request),
+            new HttpResponseEncoder(connection_handle, response, request),
             true);
 
         // Note the file descriptor gets closed by FileEncoder.
         ev_man->send(
-            new FileEncoder(socket, fd, s.st_size),
+            new FileEncoder(connection_handle, fd, s.st_size),
             request.keepAlive);
       }
     }
@@ -166,7 +168,7 @@ bool HttpProxy::process(const Future<Response>& future, const Request& request)
     if (nonblock.isError()) {
       const char* error = strerror(errno);
       VLOG(1) << "Failed make pipe nonblocking: " << error;
-      ev_man->send(InternalServerError(), request, socket);
+      ev_man->send(InternalServerError(), request, connection_handle);
       return true; // All done, can process next response.
     }
 
@@ -177,7 +179,7 @@ bool HttpProxy::process(const Future<Response>& future, const Request& request)
     VLOG(1) << "Starting \"chunked\" streaming";
 
     ev_man->send(
-        new HttpResponseEncoder(socket, response, request),
+        new HttpResponseEncoder(connection_handle, response, request),
         true);
 
     pipe = response.pipe;
@@ -187,7 +189,7 @@ bool HttpProxy::process(const Future<Response>& future, const Request& request)
 
     return false; // Streaming, don't process next response (yet)!
   } else {
-    ev_man->send(response, request, socket);
+    ev_man->send(response, request, connection_handle);
   }
 
   return true; // All done, can process next response.
@@ -238,17 +240,17 @@ void HttpProxy::stream(const Future<short>& poll, const Request& request)
         // We always persist the connection when we're not finished
         // streaming.
         ev_man->send(
-            new DataEncoder(socket, out.str()),
+            new DataEncoder(connection_handle, out.str()),
             finished ? request.keepAlive : true);
       }
     }
   } else if (poll.isFailed()) {
     VLOG(1) << "Failed to poll: " << poll.failure();
-    ev_man->send(InternalServerError(), request, socket);
+    ev_man->send(InternalServerError(), request, connection_handle);
     finished = true;
   } else {
     VLOG(1) << "Unexpected discarded future while polling";
-    ev_man->send(InternalServerError(), request, socket);
+    ev_man->send(InternalServerError(), request, connection_handle);
     finished = true;
   }
 

@@ -17,7 +17,7 @@ public:
   virtual void send(
       const http::Response& response,
       const http::Request& request,
-      const Socket& socket) = 0;
+      const ConnectionHandle& connection_handle) = 0;
 
 protected:
   EventManager() {}

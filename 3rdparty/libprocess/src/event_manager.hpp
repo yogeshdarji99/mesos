@@ -31,7 +31,7 @@ public:
 
     /* Handle the given request for this socket. */
     virtual bool handle(
-        const Socket& socket,
+        const ConnectionHandle& connection_handle,
         http::Request* request) = 0;
   };
 
@@ -62,8 +62,8 @@ public:
   virtual void link(ProcessBase* process, const UPID& to) = 0;
 
   /* Return a handle to the HttpProxy representing the connection on
-   * the given socket. */
-  virtual PID<HttpProxy> proxy(const Socket& socket) = 0;
+   * the given connection handle. */
+  virtual PID<HttpProxy> proxy(const ConnectionHandle& connection_handle) = 0;
 
   /* Send the given message to the remote host identified in the
    * message. */

@@ -29,6 +29,22 @@ using std::string;
 
 namespace process {
 
+class LibevConnection : public Connection {
+public:
+  LibevConnection(const Connection::id_t& fd) : Connection(fd) {}
+  virtual ~LibevConnection()
+  {
+    if (id >= 0) {
+      Try<Nothing> close = os::close(id);
+      if (close.isError()) {
+        std::cerr << "Failed to close socket: " << close.error() << std::endl;
+        abort();
+      }
+    }
+  }
+
+};
+
 class LibevEventManager : public EventManager
 {
 public:
@@ -40,16 +56,17 @@ public:
 
   virtual double get_time() const override;
 
-  Socket accepted(int s);
+  ConnectionHandle accepted(int s);
 
   virtual void link(ProcessBase* process, const UPID& to) override;
 
-  virtual PID<HttpProxy> proxy(const Socket& socket) override;
+  virtual PID<HttpProxy> proxy(
+      const ConnectionHandle& connection_handle) override;
 
   virtual void send(Encoder* encoder, bool persist) override;
   virtual void send(const Response& response,
             const Request& request,
-            const Socket& socket) override;
+            const ConnectionHandle& connection_handle) override;
   virtual void send(Message* message) override;
 
   Encoder* next(int s);
@@ -89,8 +106,8 @@ private:
   // Map from UPID (local/remote) to process.
   map<UPID, set<ProcessBase*> > links;
 
-  // Collection of all actice sockets.
-  map<int, Socket> sockets;
+  // Collection of all active connection handles.
+  map<int, ConnectionHandle> connection_handles;
 
   // Collection of sockets that should be disposed when they are
   // finished being used (e.g., when there is no more data to send on
@@ -400,7 +417,7 @@ void recv_data(struct ev_loop* loop, ev_io* watcher, int revents)
 
       if (!requests.empty()) {
         foreach (Request* request, requests) {
-          LibevMan->proc_man->handle(decoder->socket(), request);
+          LibevMan->proc_man->handle(decoder->connection_handle(), request);
         }
       } else if (requests.empty() && decoder->failed()) {
         VLOG(1) << "Decoder error while receiving";
@@ -422,7 +439,7 @@ void recv_data(struct ev_loop* loop, ev_io* watcher, int revents)
 // closed.
 void ignore_data(struct ev_loop* loop, ev_io* watcher, int revents)
 {
-  Socket* socket = (Socket*) watcher->data;
+  ConnectionHandle* connection_handle = (ConnectionHandle*) watcher->data;
 
   int s = watcher->fd;
 
@@ -450,7 +467,7 @@ void ignore_data(struct ev_loop* loop, ev_io* watcher, int revents)
       }
       LibevMan->close(s);
       ev_io_stop(loop, watcher);
-      delete socket;
+      delete connection_handle;
       delete watcher;
       break;
     } else {
@@ -631,8 +648,8 @@ void receiving_connect(struct ev_loop* loop, ev_io* watcher, int revents)
     // Connect failure.
     VLOG(1) << "Socket error while connecting";
     LibevMan->close(s);
-    Socket* socket = (Socket*) watcher->data;
-    delete socket;
+    ConnectionHandle* connection_handle = (ConnectionHandle*) watcher->data;
+    delete connection_handle;
     ev_io_stop(loop, watcher);
     delete watcher;
   } else {
@@ -681,10 +698,10 @@ void accept(struct ev_loop* loop, ev_io* watcher, int revents)
     os::close(s);
   } else {
     // Inform the socket manager for proper bookkeeping.
-    const Socket& socket = LibevMan->accepted(s);
+    ConnectionHandle connection_handle = LibevMan->accepted(s);
 
     // Allocate and initialize the decoder and watcher.
-    DataDecoder* decoder = new DataDecoder(socket);
+    DataDecoder* decoder = new DataDecoder(connection_handle);
 
     ev_io* watcher = new ev_io();
     watcher->data = decoder;
@@ -744,10 +761,10 @@ double LibevEventManager::get_time() const
   return ev_time();
 }
 
-Socket LibevEventManager::accepted(int s)
+ConnectionHandle LibevEventManager::accepted(int s)
 {
   synchronized (this) {
-    return sockets[s] = Socket(s);
+    return connection_handles[s] = std::make_shared<LibevConnection>(s);
   }
 
   return UNREACHABLE(); // Quiet the compiler.
@@ -790,7 +807,7 @@ void LibevEventManager::link(ProcessBase* process, const UPID& to)
         LOG(FATAL) << "Failed to link, cloexec: " << cloexec.error();
       }
 
-      sockets[s] = Socket(s);
+      connection_handles[s] = std::make_shared<LibevConnection>(s);
       nodes[s] = node;
 
       persists[node] = s;
@@ -801,7 +818,7 @@ void LibevEventManager::link(ProcessBase* process, const UPID& to)
       // We do, however, want to react when it gets closed so we can
       // generate appropriate lost events (since this is a 'link').
       ev_io* watcher = new ev_io();
-      watcher->data = new Socket(sockets[s]);
+      watcher->data = new ConnectionHandle(connection_handles[s]);
 
       // Try and connect to the node using this socket.
       sockaddr_in addr;
@@ -835,7 +852,8 @@ void LibevEventManager::link(ProcessBase* process, const UPID& to)
 }
 
 
-PID<HttpProxy> LibevEventManager::proxy(const Socket& socket)
+PID<HttpProxy> LibevEventManager::proxy(
+    const ConnectionHandle& connection_handle)
 {
   HttpProxy* proxy = NULL;
 
@@ -843,12 +861,13 @@ PID<HttpProxy> LibevEventManager::proxy(const Socket& socket)
     // This socket might have been asked to get closed (e.g., remote
     // side hang up) while a process is attempting to handle an HTTP
     // request. Thus, if there is no more socket, return an empty PID.
-    if (sockets.count(socket) > 0) {
-      if (proxies.count(socket) > 0) {
-        return proxies[socket]->self();
+    const Connection::id_t &conn_id = *connection_handle;
+    if (connection_handles.count(conn_id) > 0) {
+      if (proxies.count(conn_id) > 0) {
+        return proxies[conn_id]->self();
       } else {
-        proxy = new HttpProxy(sockets[socket], this);
-        proxies[socket] = proxy;
+        proxy = new HttpProxy(connection_handles[conn_id], this);
+        proxies[conn_id] = proxy;
       }
     }
   }
@@ -872,18 +891,19 @@ void LibevEventManager::send(Encoder* encoder, bool persist)
   CHECK(encoder != NULL);
 
   synchronized (this) {
-    if (sockets.count(encoder->socket()) > 0) {
+    const Connection::id_t &conn_id = *encoder->connection_handle();
+    if (connection_handles.count(conn_id) > 0) {
       // Update whether or not this socket should get disposed after
       // there is no more data to send.
       if (!persist) {
-        dispose.insert(encoder->socket());
+        dispose.insert(conn_id);
       }
 
-      if (outgoing.count(encoder->socket()) > 0) {
-        outgoing[encoder->socket()].push(encoder);
+      if (outgoing.count(conn_id) > 0) {
+        outgoing[conn_id].push(encoder);
       } else {
         // Initialize the outgoing queue.
-        outgoing[encoder->socket()];
+        outgoing[conn_id];
 
         // Allocate and initialize the watcher.
         ev_io* watcher = new ev_io();
@@ -892,7 +912,7 @@ void LibevEventManager::send(Encoder* encoder, bool persist)
         ev_io_init(
             watcher,
             get_send_function(encoder->io_kind()),
-            encoder->socket(),
+            conn_id,
             EV_WRITE);
 
         synchronized (watchers) {
@@ -912,7 +932,7 @@ void LibevEventManager::send(Encoder* encoder, bool persist)
 void LibevEventManager::send(
     const Response& response,
     const Request& request,
-    const Socket& socket)
+    const ConnectionHandle& connection_handle)
 {
   bool persist = request.keepAlive;
 
@@ -924,7 +944,7 @@ void LibevEventManager::send(
     }
   }
 
-  send(new HttpResponseEncoder(socket, response, request), persist);
+  send(new HttpResponseEncoder(connection_handle, response, request), persist);
 }
 
 
@@ -940,8 +960,8 @@ void LibevEventManager::send(Message* message)
     bool temp = temps.count(node) > 0;
     if (persist || temp) {
       int s = persist ? persists[node] : temps[node];
-      CHECK(sockets.count(s) > 0);
-      send(new MessageEncoder(sockets[s], message), persist);
+      CHECK(connection_handles.count(s) > 0);
+      send(new MessageEncoder(connection_handles[s], message), persist);
     } else {
       // No peristent or temporary socket to the node currently
       // exists, so we create a temporary one.
@@ -962,7 +982,7 @@ void LibevEventManager::send(Message* message)
         LOG(FATAL) << "Failed to send, cloexec: " << cloexec.error();
       }
 
-      sockets[s] = Socket(s);
+      connection_handles[s] = std::make_shared<LibevConnection>(s);
       nodes[s] = node;
       temps[node] = s;
 
@@ -975,7 +995,7 @@ void LibevEventManager::send(Message* message)
       // socket. Note that we don't expect to receive anything other
       // than HTTP '202 Accepted' responses which we anyway ignore.
       ev_io* watcher = new ev_io();
-      watcher->data = new Socket(sockets[s]);
+      watcher->data = new ConnectionHandle(connection_handles[s]);
 
       ev_io_init(watcher, ignore_data, s, EV_READ);
 
@@ -986,7 +1006,7 @@ void LibevEventManager::send(Message* message)
 
       // Allocate and initialize a watcher for sending the message.
       watcher = new ev_io();
-      watcher->data = new MessageEncoder(sockets[s], message);
+      watcher->data = new MessageEncoder(connection_handles[s], message);
 
       // Try and connect to the node using this socket.
       sockaddr_in addr;
@@ -1036,7 +1056,7 @@ Encoder* LibevEventManager::next(int s)
     // invoked we find out there there is no more data and thus stop
     // sending.
     // TODO(benh): Should we actually finish sending the data!?
-    if (sockets.count(s) > 0) {
+    if (connection_handles.count(s) > 0) {
       CHECK(outgoing.count(s) > 0);
 
       if (!outgoing[s].empty()) {
@@ -1065,7 +1085,7 @@ Encoder* LibevEventManager::next(int s)
           }
 
           dispose.erase(s);
-          sockets.erase(s);
+          connection_handles.erase(s);
 
           // We don't actually close the socket (we wait for the Socket
           // abstraction to close it once there are no more references),
@@ -1098,7 +1118,7 @@ void LibevEventManager::close(int s)
     // it and then later the read side of the socket gets closed so we
     // try and close it again). Thus, ignore the request if we don't
     // know about the socket.
-    if (sockets.count(s) > 0) {
+    if (connection_handles.count(s) > 0) {
       // Clean up any remaining encoders for this socket.
       if (outgoing.count(s) > 0) {
         while (!outgoing[s].empty()) {
@@ -1142,7 +1162,7 @@ void LibevEventManager::close(int s)
       shutdown(s, SHUT_RD);
 
       dispose.erase(s);
-      sockets.erase(s);
+      connection_handles.erase(s);
     }
   }
 

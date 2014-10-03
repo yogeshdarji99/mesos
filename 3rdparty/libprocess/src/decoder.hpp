@@ -23,8 +23,8 @@ namespace process {
 class DataDecoder
 {
 public:
-  explicit DataDecoder(const Socket& _s)
-    : s(_s), failure(false), request(NULL)
+  explicit DataDecoder(const ConnectionHandle& _conn_handle)
+    : conn_handle(_conn_handle), failure(false), request(NULL)
   {
     settings.on_message_begin = &DataDecoder::on_message_begin;
     settings.on_header_field = &DataDecoder::on_header_field;
@@ -67,9 +67,9 @@ public:
     return failure;
   }
 
-  Socket socket() const
+  const ConnectionHandle& connection_handle() const
   {
-    return s;
+    return conn_handle;
   }
 
 private:
@@ -240,7 +240,8 @@ private:
     return 0;
   }
 
-  const Socket s; // The socket this decoder is associated with.
+  // The connection handle this decoder is associated with.
+  const ConnectionHandle conn_handle;
 
   bool failure;
 

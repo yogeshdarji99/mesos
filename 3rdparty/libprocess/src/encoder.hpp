@@ -29,26 +29,31 @@ public:
     send_file
   };
 
-  explicit Encoder(const Socket& _s) : s(_s) {}
+  explicit Encoder(const ConnectionHandle& _connection_handle)
+      : conn_handle(_connection_handle) {}
   virtual ~Encoder() {}
 
   virtual IOKind io_kind() = 0;
 
-  Socket socket() const
+  const ConnectionHandle& connection_handle() const
   {
-    return s;
+    return conn_handle;
   }
 
 private:
-  const Socket s; // The socket this encoder is associated with.
+
+  // The connection handle this encoder is associated with.
+  const ConnectionHandle conn_handle;
 };
 
 
 class DataEncoder : public Encoder
 {
 public:
-  DataEncoder(const Socket& s, const std::string& _data)
-    : Encoder(s), data(_data), index(0) {}
+  DataEncoder(
+      const ConnectionHandle& _connection_handle,
+      const std::string& _data)
+      : Encoder(_connection_handle), data(_data), index(0) {}
 
   virtual ~DataEncoder() {}
 
@@ -86,8 +91,8 @@ private:
 class MessageEncoder : public DataEncoder
 {
 public:
-  MessageEncoder(const Socket& s, Message* _message)
-    : DataEncoder(s, encode(_message)), message(_message) {}
+  MessageEncoder(const ConnectionHandle& _connection_handle, Message* _message)
+    : DataEncoder(_connection_handle, encode(_message)), message(_message) {}
 
   virtual ~MessageEncoder()
   {
@@ -138,10 +143,10 @@ class HttpResponseEncoder : public DataEncoder
 {
 public:
   HttpResponseEncoder(
-      const Socket& s,
+      const ConnectionHandle& _connection_handle,
       const http::Response& response,
       const http::Request& request)
-    : DataEncoder(s, encode(response, request)) {}
+    : DataEncoder(_connection_handle, encode(response, request)) {}
 
   static std::string encode(
       const http::Response& response,
@@ -222,8 +227,8 @@ public:
 class FileEncoder : public Encoder
 {
 public:
-  FileEncoder(const Socket& s, int _fd, size_t _size)
-    : Encoder(s), fd(_fd), size(_size), index(0) {}
+  FileEncoder(const ConnectionHandle& _connection_handle, int _fd, size_t _size)
+    : Encoder(_connection_handle), fd(_fd), size(_size), index(0) {}
 
   virtual ~FileEncoder()
   {

@@ -16,9 +16,16 @@ using std::deque;
 using std::string;
 
 
+class TestConnection : public Connection {
+public:
+  TestConnection(const Connection::id_t& _id = 0) : Connection(_id) {}
+  virtual ~TestConnection() {}
+};
+
+
 TEST(Decoder, Request)
 {
-  DataDecoder decoder = DataDecoder(Socket());
+  DataDecoder decoder = DataDecoder(std::make_shared<TestConnection>());
 
   const string& data =
     "GET /path/file.json?key1=value1&key2=value2#fragment HTTP/1.1\r\n"
@@ -54,7 +61,7 @@ TEST(Decoder, Request)
 
 TEST(Decoder, RequestHeaderContinuation)
 {
-  DataDecoder decoder = DataDecoder(Socket());
+  DataDecoder decoder = DataDecoder(std::make_shared<TestConnection>());
 
   const string& data =
     "GET /path/file.json HTTP/1.1\r\n"
@@ -78,7 +85,7 @@ TEST(Decoder, RequestHeaderContinuation)
 // This is expected to fail for now, see my TODO(bmahler) on http::Request.
 TEST(Decoder, DISABLED_RequestHeaderCaseInsensitive)
 {
-  DataDecoder decoder = DataDecoder(Socket());
+  DataDecoder decoder = DataDecoder(std::make_shared<TestConnection>());
 
   const string& data =
     "GET /path/file.json HTTP/1.1\r\n"

@@ -34,76 +34,27 @@ inline Try<int> socket(int family, int type, int protocol) {
 }
 
 
-// An abstraction around a socket (file descriptor) that provides
-// reference counting such that the socket is only closed (and thus,
-// has the possiblity of being reused) after there are no more
-// references.
-
-class Socket
-{
+class Connection {
 public:
-  Socket()
-    : refs(new int(1)), s(-1) {}
+  typedef int id_t;
+  virtual ~Connection() {}
 
-  explicit Socket(int _s)
-    : refs(new int(1)), s(_s) {}
-
-  ~Socket()
+  inline operator const id_t&() const
   {
-    cleanup();
+    return id;
   }
 
-  Socket(const Socket& that)
-  {
-    copy(that);
-  }
+protected:
+  Connection(const id_t& _id) : id(_id) {}
 
-  Socket& operator = (const Socket& that)
-  {
-    if (this != &that) {
-      cleanup();
-      copy(that);
-    }
-    return *this;
-  }
-
-  bool operator == (const Socket& that) const
-  {
-    return s == that.s && refs == that.refs;
-  }
-
-  operator int () const
-  {
-    return s;
-  }
-
-private:
-  void copy(const Socket& that)
-  {
-    assert(that.refs > 0);
-    __sync_fetch_and_add(that.refs, 1);
-    refs = that.refs;
-    s = that.s;
-  }
-
-  void cleanup()
-  {
-    assert(refs != NULL);
-    if (__sync_sub_and_fetch(refs, 1) == 0) {
-      delete refs;
-      if (s >= 0) {
-        Try<Nothing> close = os::close(s);
-        if (close.isError()) {
-          std::cerr << "Failed to close socket: " << close.error() << std::endl;
-          abort();
-        }
-      }
-    }
-  }
-
-  int* refs;
-  int s;
+  /* This is good enough for now. In the future we might not want to
+   * limit ourselves to representing the identifier as an int (fd). */
+  const id_t id;
 };
+
+
+typedef std::shared_ptr<Connection> ConnectionHandle;
+
 
 } // namespace process {
 

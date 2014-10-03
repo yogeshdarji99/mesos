@@ -199,7 +199,7 @@ public:
   virtual ProcessReference use(const UPID& pid) override;
 
   virtual bool handle(
-      const Socket& socket,
+      const ConnectionHandle& connection_handle,
       Request* request) override;
 
   bool deliver(
@@ -930,7 +930,7 @@ ProcessReference ProcessManager::use(const UPID& pid)
 
 
 bool ProcessManager::handle(
-    const Socket& socket,
+    const ConnectionHandle& connection_handle,
     Request* request)
 {
   CHECK(request != NULL);
@@ -944,8 +944,8 @@ bool ProcessManager::handle(
       // capture happens-before timing relationships for testing.
       bool accepted = deliver(message->to, new MessageEvent(message));
 
-      // Get the HttpProxy pid for this socket.
-      PID<HttpProxy> proxy = event_manager->proxy(socket);
+      // Get the HttpProxy pid for this connection.
+      PID<HttpProxy> proxy = event_manager->proxy(connection_handle);
 
       // Only send back an HTTP response if this isn't from libprocess
       // (which we determine by looking at the User-Agent). This is
@@ -983,8 +983,8 @@ bool ProcessManager::handle(
   if (request->path.find('/') != 0) {
     VLOG(1) << "Returning '400 Bad Request' for '" << request->path << "'";
 
-    // Get the HttpProxy pid for this socket.
-    PID<HttpProxy> proxy = event_manager->proxy(socket);
+    // Get the HttpProxy pid for this connection.
+    PID<HttpProxy> proxy = event_manager->proxy(connection_handle);
 
     // Enqueue the response with the HttpProxy so that it respects the
     // order of requests to account for HTTP/1.1 pipelining.
@@ -1000,8 +1000,8 @@ bool ProcessManager::handle(
     VLOG(1) << "Returning '404 Not Found' for '" << request->path
             << "' (ignoring requests with relative paths)";
 
-    // Get the HttpProxy pid for this socket.
-    PID<HttpProxy> proxy = event_manager->proxy(socket);
+    // Get the HttpProxy pid for this connection.
+    PID<HttpProxy> proxy = event_manager->proxy(connection_handle);
 
     // Enqueue the response with the HttpProxy so that it respects the
     // order of requests to account for HTTP/1.1 pipelining.
@@ -1040,14 +1040,14 @@ bool ProcessManager::handle(
   if (receiver) {
     // TODO(benh): Use the sender PID in order to capture
     // happens-before timing relationships for testing.
-    return deliver(receiver, new HttpEvent(socket, request));
+    return deliver(receiver, new HttpEvent(connection_handle, request));
   }
 
   // This has no receiver, send error response.
   VLOG(1) << "Returning '404 Not Found' for '" << request->path << "'";
 
-  // Get the HttpProxy pid for this socket.
-  PID<HttpProxy> proxy = event_manager->proxy(socket);
+  // Get the HttpProxy pid for this connection.
+  PID<HttpProxy> proxy = event_manager->proxy(connection_handle);
 
   // Enqueue the response with the HttpProxy so that it respects the
   // order of requests to account for HTTP/1.1 pipelining.
@@ -1826,8 +1826,8 @@ void ProcessBase::visit(const HttpEvent& event)
 
     Future<Response>* future = new Future<Response>(promise->future());
 
-    // Get the HttpProxy pid for this socket.
-    PID<HttpProxy> proxy = event_manager->proxy(event.socket);
+    // Get the HttpProxy pid for this connection.
+    PID<HttpProxy> proxy = event_manager->proxy(event.connection_handle);
 
     // Let the HttpProxy know about this request (via the future).
     dispatch(proxy, &HttpProxy::handle, future, *event.request);
@@ -1860,8 +1860,8 @@ void ProcessBase::visit(const HttpEvent& event)
     // extension or we don't have a mapping for? It might be better to
     // just let the browser guess (or do it's own default).
 
-    // Get the HttpProxy pid for this socket.
-    PID<HttpProxy> proxy = event_manager->proxy(event.socket);
+    // Get the HttpProxy pid for this connection.
+    PID<HttpProxy> proxy = event_manager->proxy(event.connection_handle);
 
     // Enqueue the response with the HttpProxy so that it respects the
     // order of requests to account for HTTP/1.1 pipelining.
@@ -1869,8 +1869,8 @@ void ProcessBase::visit(const HttpEvent& event)
   } else {
     VLOG(1) << "Returning '404 Not Found' for '" << event.request->path << "'";
 
-    // Get the HttpProxy pid for this socket.
-    PID<HttpProxy> proxy = event_manager->proxy(event.socket);
+    // Get the HttpProxy pid for this connection.
+    PID<HttpProxy> proxy = event_manager->proxy(event.connection_handle);
 
     // Enqueue the response with the HttpProxy so that it respects the
     // order of requests to account for HTTP/1.1 pipelining.
