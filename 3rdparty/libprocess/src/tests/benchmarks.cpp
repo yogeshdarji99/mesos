@@ -180,3 +180,33 @@ TEST(Process, Process_BENCHMARK_Test)
     wait(process);
   }
 }
+
+class HttpProcess : public Process<HttpProcess>
+{
+public:
+  HttpProcess()
+  {
+    route("/handler", None(), &Self::handler);
+  }
+
+  Future<http::Response> handler(const http::Request&req) {
+    return http::OK("Hi");
+  }
+};
+
+TEST(Process, HttpBenchmark)
+{
+  HttpProcess process;
+
+  spawn(process);
+
+  for (size_t i = 0; i < 10000; ++i) {
+    Future<http::Response> response = http::get(process.self(), "handler");
+
+    AWAIT_READY(response);
+    EXPECT_EQ(http::statuses[200], response.get().status);
+  }
+
+  terminate(process);
+  wait(process);
+}

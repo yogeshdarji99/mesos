@@ -18,6 +18,7 @@
 #include <stout/try.hpp>
 
 #include "decoder.hpp"
+#include "event_manager.hpp"
 
 using std::deque;
 using std::string;
@@ -65,20 +66,6 @@ Future<Response> request(
     const Option<string>& body,
     const Option<string>& contentType)
 {
-  Try<int> socket = process::socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
-
-  if (socket.isError()) {
-    return Failure("Failed to create socket: " + socket.error());
-  }
-
-  int s = socket.get();
-
-  Try<Nothing> cloexec = os::cloexec(s);
-  if (!cloexec.isSome()) {
-    os::close(s);
-    return Failure("Failed to cloexec: " + cloexec.error());
-  }
-
   // We use inet_ntop since inet_ntoa is not thread-safe!
   char ip[INET_ADDRSTRLEN];
   if (inet_ntop(AF_INET, (in_addr*) &upid.ip, ip, INET_ADDRSTRLEN) == NULL) {
@@ -88,16 +75,14 @@ Future<Response> request(
 
   const string host = string(ip) + ":" + stringify(upid.port);
 
-  sockaddr_in addr;
-  memset(&addr, 0, sizeof(addr));
-  addr.sin_family = AF_INET;
-  addr.sin_port = htons(upid.port);
-  addr.sin_addr.s_addr = upid.ip;
-
-  if (connect(s, (sockaddr*) &addr, sizeof(addr)) < 0) {
-    os::close(s);
-    return Failure(ErrnoError("Failed to connect to '" + host + "'"));
+  Try<ConnectionHandle> conn_handle = EventManager::new_connection(
+      upid.ip,
+      upid.port,
+      IPPROTO_IP);
+  if (conn_handle.isError()) {
+    return Failure("Failed to create Http connection: " + conn_handle.error());
   }
+  ConnectionHandle connection_handle = conn_handle.get();
 
   std::ostringstream out;
 
@@ -147,19 +132,9 @@ Future<Response> request(
     out << body.get();
   }
 
-  Try<Nothing> nonblock = os::nonblock(s);
-  if (!nonblock.isSome()) {
-    os::close(s);
-    return Failure("Failed to set nonblock: " + nonblock.error());
-  }
-
-  // Need to disambiguate the io::read we want when binding below.
-  Future<string> (*read)(int) = io::read;
-
-  return io::write(s, out.str())
-    .then(lambda::bind(read, s))
-    .then(lambda::bind(&internal::decode, lambda::_1))
-    .onAny(lambda::bind(&os::close, s));
+  return EventManager::conn_write(connection_handle, out.str())
+    .then(lambda::bind(&EventManager::conn_read, connection_handle))
+    .then(lambda::bind(&internal::decode, lambda::_1));
 }
 
 

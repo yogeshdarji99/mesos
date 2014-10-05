@@ -37,6 +37,32 @@ public:
 
   virtual ~EventManager() {}
 
+  static inline Try<ConnectionHandle> new_connection(
+      uint32_t ip,
+      uint16_t port,
+      int protocol);
+
+  static inline Future<short> conn_poll(
+      const ConnectionHandle& conn_handle,
+      short events);
+
+  static inline Future<size_t> conn_read_data(
+      const ConnectionHandle& conn_handle,
+      void* data,
+      size_t size);
+
+  static inline Future<std::string> conn_read(
+      const ConnectionHandle& conn_handle);
+
+  static inline Future<Nothing> conn_write(
+      const ConnectionHandle& conn_handle,
+      const std::string& data);
+
+  static inline Future<size_t> conn_write(
+      const ConnectionHandle& conn_handle,
+      void* data,
+      size_t size);
+
   /* Forward the enqueue call from a more derived class. This is a proxy call
    * as ProcessBase can not friend all derived versions of this class. They may
    * not be known at compile time. */
@@ -112,10 +138,95 @@ public:
   // see process/io.hpp
   virtual Future<Nothing> redirect(int from, Option<int> to, size_t chunk) = 0;
 
-protected:
-  EventManager() {}
+  virtual Future<short> do_poll(
+      const ConnectionHandle& conn_handle,
+      short events) = 0;
 
+  virtual Future<size_t> do_read(
+      const ConnectionHandle& conn_handle,
+      void* data,
+      size_t size) = 0;
+
+  virtual Future<std::string> do_read(const ConnectionHandle& conn_handle) = 0;
+
+  virtual Future<Nothing> do_write(
+      const ConnectionHandle& conn_handle,
+      const std::string& data) = 0;
+
+      virtual Future<size_t> do_write(
+      const ConnectionHandle& conn_handle,
+      void* data,
+      size_t size) = 0;
+
+protected:
+  EventManager();
+
+  /* Construct a new connection and return a handle to it. This is a
+   TCP connection. */
+  virtual Try<ConnectionHandle> make_new_connection(
+      uint32_t ip,
+      uint16_t port,
+      int protocol) = 0;
+
+private:
+  static EventManager* singleton;
 };
+
+inline EventManager::EventManager()
+{
+  CHECK(!singleton) << "Can not instantiate multiple event managers";
+  singleton = this;
+}
+
+inline Try<ConnectionHandle> EventManager::new_connection(
+    uint32_t ip,
+    uint16_t port,
+    int protocol)
+{
+  CHECK(singleton) << "new_connection requires an initialized EventManager";
+  return singleton->make_new_connection(ip, port, protocol);
+}
+
+inline Future<short> EventManager::conn_poll(
+    const ConnectionHandle& conn_handle,
+    short events)
+{
+  CHECK(singleton) << "poll requires an initialized EventManager";
+  return singleton->do_poll(conn_handle, events);
+}
+
+inline Future<size_t> EventManager::conn_read_data(
+    const ConnectionHandle& conn_handle,
+    void* data,
+    size_t size)
+{
+  CHECK(singleton) << "read requires an initialized EventManager";
+  return singleton->do_read(conn_handle, data, size);
+}
+
+inline Future<std::string> EventManager::conn_read(
+    const ConnectionHandle& conn_handle)
+{
+  CHECK(singleton) << "read requires an initialized EventManager";
+  return singleton->do_read(conn_handle);
+}
+
+inline Future<Nothing> EventManager::conn_write(
+      const ConnectionHandle& conn_handle,
+      const std::string& data)
+{
+  CHECK(singleton) << "write requires an initialized EventManager";
+  return singleton->do_write(conn_handle, data);
+}
+
+inline Future<size_t> EventManager::conn_write(
+      const ConnectionHandle& conn_handle,
+      void* data,
+      size_t size)
+{
+  CHECK(singleton) << "write requires an initialized EventManager";
+  return singleton->do_write(conn_handle, data, size);
+}
 
 inline void EventManager::enqueue(
     ProcessBase* proc_base,

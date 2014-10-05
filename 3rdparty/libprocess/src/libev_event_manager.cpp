@@ -54,6 +54,32 @@ public:
 
   virtual void initialize() override;
 
+  virtual Try<ConnectionHandle> make_new_connection(
+      uint32_t ip,
+      uint16_t port,
+      int protocol) override;
+
+  virtual Future<short> do_poll(
+      const ConnectionHandle& conn_handle,
+      short events) override;
+
+  virtual Future<size_t> do_read(
+      const ConnectionHandle& conn_handle,
+      void* data,
+      size_t size) override;
+
+  virtual Future<std::string> do_read(
+      const ConnectionHandle& conn_handle) override;
+
+  virtual Future<Nothing> do_write(
+      const ConnectionHandle& conn_handle,
+      const std::string& data) override;
+
+  virtual Future<size_t> do_write(
+      const ConnectionHandle& conn_handle,
+      void* data,
+      size_t size) override;
+
   virtual double get_time() const override;
 
   ConnectionHandle accepted(int s);
@@ -756,6 +782,77 @@ void LibevEventManager::initialize()
   }
 }
 
+Try<ConnectionHandle> LibevEventManager::make_new_connection(
+    uint32_t ip,
+    uint16_t port,
+    int protocol)
+{
+  Try<int> socket = process::socket(AF_INET, SOCK_STREAM, protocol);
+  if (socket.isError()) {
+    return Error("Failed to create socket: " + socket.error());
+  }
+
+  int s = socket.get();
+
+  Try<Nothing> cloexec = os::cloexec(s);
+  if (!cloexec.isSome()) {
+    os::close(s);
+    return Error("Failed to cloexec: " + cloexec.error());
+  }
+  sockaddr_in addr;
+  memset(&addr, 0, sizeof(addr));
+  addr.sin_family = AF_INET;
+  addr.sin_port = htons(port);
+  addr.sin_addr.s_addr = ip;
+  if (connect(s, (sockaddr*) &addr, sizeof(addr)) < 0) {
+    os::close(s);
+    return ErrnoError("Failed to connect to '" + stringify(ip) + ":" +
+      stringify(port) + "'");
+  }
+  Try<Nothing> nonblock = os::nonblock(s);
+  if (!nonblock.isSome()) {
+    os::close(s);
+    return Error("Failed to set nonblock: " + nonblock.error());
+  }
+  return std::make_shared<LibevConnection>(s);
+}
+
+Future<short> LibevEventManager::do_poll(
+    const ConnectionHandle& conn_handle,
+    short events)
+{
+  return io::poll(*conn_handle, events);
+}
+
+Future<size_t> LibevEventManager::do_read(
+    const ConnectionHandle& conn_handle,
+    void* data,
+    size_t size)
+{
+  return io::read(*conn_handle, data, size);
+}
+
+Future<std::string> LibevEventManager::do_read(
+    const ConnectionHandle& conn_handle)
+{
+  return io::read(*conn_handle);
+}
+
+Future<Nothing> LibevEventManager::do_write(
+    const ConnectionHandle& conn_handle,
+    const std::string& data)
+{
+  return io::write(*conn_handle, data);
+}
+
+Future<size_t> LibevEventManager::do_write(
+    const ConnectionHandle& conn_handle,
+    void* data,
+    size_t size)
+{
+  return io::write(*conn_handle, data, size);
+}
+
 double LibevEventManager::get_time() const
 {
   return ev_time();
@@ -789,28 +886,22 @@ void LibevEventManager::link(ProcessBase* process, const UPID& to)
     // Check if node is remote and there isn't a persistant link.
     if ((node.ip != __ip__ || node.port != __port__)
         && persists.count(node) == 0) {
+
       // Okay, no link, let's create a socket.
-      Try<int> socket = process::socket(AF_INET, SOCK_STREAM, 0);
-      if (socket.isError()) {
-        LOG(FATAL) << "Failed to link, socket: " << socket.error();
+      Try<ConnectionHandle> connection_handle = make_new_connection(
+          to.ip,
+          to.port,
+          0);
+      if (connection_handle.isError()) {
+        LOG(FATAL) << "Fail to link, connection: " << connection_handle.error();
       }
+      ConnectionHandle conn_handle = connection_handle.get();
+      const Connection::id_t &conn_id = *conn_handle;
+      connection_handles[conn_id] = conn_handle;
 
-      int s = socket.get();
+      nodes[conn_id] = node;
 
-      Try<Nothing> nonblock = os::nonblock(s);
-      if (nonblock.isError()) {
-        LOG(FATAL) << "Failed to link, nonblock: " << nonblock.error();
-      }
-
-      Try<Nothing> cloexec = os::cloexec(s);
-      if (cloexec.isError()) {
-        LOG(FATAL) << "Failed to link, cloexec: " << cloexec.error();
-      }
-
-      connection_handles[s] = std::make_shared<LibevConnection>(s);
-      nodes[s] = node;
-
-      persists[node] = s;
+      persists[node] = conn_id;
 
       // Allocate and initialize a watcher for reading data from this
       // socket. Note that we don't expect to receive anything other
@@ -818,25 +909,7 @@ void LibevEventManager::link(ProcessBase* process, const UPID& to)
       // We do, however, want to react when it gets closed so we can
       // generate appropriate lost events (since this is a 'link').
       ev_io* watcher = new ev_io();
-      watcher->data = new ConnectionHandle(connection_handles[s]);
-
-      // Try and connect to the node using this socket.
-      sockaddr_in addr;
-      memset(&addr, 0, sizeof(addr));
-      addr.sin_family = PF_INET;
-      addr.sin_port = htons(to.port);
-      addr.sin_addr.s_addr = to.ip;
-
-      if (connect(s, (sockaddr*) &addr, sizeof(addr)) < 0) {
-        if (errno != EINPROGRESS) {
-          PLOG(FATAL) << "Failed to link, connect";
-        }
-
-        // Wait for socket to be connected.
-        ev_io_init(watcher, receiving_connect, s, EV_WRITE);
-      } else {
-        ev_io_init(watcher, ignore_data, s, EV_READ);
-      }
+      watcher->data = new ConnectionHandle(conn_handle);
 
       // Enqueue the watcher.
       synchronized (watchers) {
