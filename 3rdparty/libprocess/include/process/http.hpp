@@ -11,6 +11,7 @@
 #include <string>
 
 #include <process/pid.hpp>
+#include <process/socket.hpp>
 
 #include <stout/error.hpp>
 #include <stout/hashmap.hpp>
@@ -161,7 +162,8 @@ struct Response
 
   std::string body;
   std::string path;
-  int pipe; // See comment above regarding the semantics for closing.
+  //int pipe; // See comment above regarding the semantics for closing.
+  ConnectionHandle pipe_conn_handle;
 };
 
 

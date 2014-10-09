@@ -19,6 +19,10 @@ public:
       const http::Request& request,
       const ConnectionHandle& connection_handle) = 0;
 
+  virtual Future<short> do_poll(
+      const ConnectionHandle& conn_handle,
+      short events) = 0;
+
 protected:
   EventManager() {}
 

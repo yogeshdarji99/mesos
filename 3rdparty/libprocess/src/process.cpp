@@ -83,7 +83,8 @@
 #include "event_manager.hpp"
 #include "http_proxy.hpp"
 #include "gate.hpp"
-#include "libev_event_manager.hpp"
+//#include "libev_event_manager.hpp"
+#include "libevent_event_manager.hpp"
 #include "process_reference.hpp"
 #include "synchronized.hpp"
 
@@ -697,7 +698,7 @@ void initialize(const string& delegate)
 
   // Create a new ProcessManager and SocketManager.
   process_manager = new ProcessManager(delegate);
-  event_manager = GetLibevEventManager(process_manager);
+  event_manager = GetLibeventEventManager(process_manager);
 
   // Setup processing threads.
   // We create no fewer than 8 threads because some tests require

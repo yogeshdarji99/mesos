@@ -87,10 +87,14 @@ if os.path.exists(libzookeeper):
 else:
     EXTRA_OBJECTS.append('-lzookeeper_mt')
 
-if os.path.exists(libev):
-    EXTRA_OBJECTS.append(libev)
-else:
-    EXTRA_OBJECTS.append('-lev')
+#if os.path.exists(libev):
+#    EXTRA_OBJECTS.append(libev)
+#else:
+#    EXTRA_OBJECTS.append('-lev')
+
+EXTRA_OBJECTS.append('-levent')
+EXTRA_OBJECTS.append('-levent_pthreads')
+EXTRA_OBJECTS.append('-laio')
 
 if os.path.exists(libglog):
     EXTRA_OBJECTS.append(libglog)

@@ -71,9 +71,11 @@ private:
     // in the event Response::type is PIPE).
     static void cleanup(const http::Response& response)
     {
+#if 0
       if (response.type == http::Response::PIPE) {
         os::close(response.pipe);
       }
+#endif
     }
 
     const http::Request request; // Make a copy.
@@ -82,7 +84,8 @@ private:
 
   std::queue<Item*> items;
 
-  Option<int> pipe; // Current pipe, if streaming.
+  //Option<int> pipe; // Current pipe, if streaming.
+  ConnectionHandle pipe_conn_handle;
 };
 
 } // namespace process {

@@ -40,8 +40,8 @@ libprocess_la_SOURCES =		\
   src/http.cpp			\
   src/http_proxy.cpp		\
   src/latch.cpp			\
-  src/libev_event_manager.cpp	\
-  src/libev_event_manager.hpp	\
+  src/libevent_event_manager.cpp\
+  src/libevent_event_manager.hpp\
   src/metrics/metrics.cpp	\
   src/pid.cpp			\
   src/process.cpp		\
@@ -55,7 +55,6 @@ libprocess_la_CPPFLAGS =		\
   -I$(srcdir)/include			\
   -I$(srcdir)/$(STOUT)/include		\
   -I$(BOOST)				\
-  -I$(LIBEV)				\
   -I$(PICOJSON)				\
   $(AM_CPPFLAGS)
 
@@ -84,7 +83,9 @@ endif
 libprocess_la_LIBADD =			\
   $(LIBGLOG)				\
   $(HTTP_PARSER_LIB)			\
-  $(LIBEV_LIB)
+  -levent				\
+  -levent_pthreads			\
+  -laio
 
 if HAS_GPERFTOOLS
 libprocess_la_CPPFLAGS += -I$(GPERFTOOLS)/src
@@ -125,7 +126,9 @@ tests_LDADD =				\
   libprocess.la				\
   $(LIBGLOG)				\
   $(HTTP_PARSER_LIB)			\
-  $(LIBEV_LIB)
+  -levent				\
+  -levent_pthreads			\
+  -laio
 
 benchmarks_SOURCES =						\
   src/tests/benchmarks.cpp
@@ -141,7 +144,9 @@ benchmarks_LDADD =			\
   libprocess.la				\
   $(LIBGLOG)				\
   $(HTTP_PARSER_LIB)			\
-  $(LIBEV_LIB)
+  -levent				\
+  -levent_pthreads			\
+  -laio
 
 # We use a check-local target for now to avoid the parallel test
 # runner that ships with newer versions of autotools.

@@ -60,7 +60,7 @@ public:
 
   static inline Future<size_t> conn_write(
       const ConnectionHandle& conn_handle,
-      void* data,
+      const void* data,
       size_t size);
 
   /* Forward the enqueue call from a more derived class. This is a proxy call
@@ -130,17 +130,13 @@ public:
   virtual Future<std::string> read(int fd) = 0;
 
   // see process/io.hpp
-  virtual Future<size_t> write(int fd, void* data, size_t size) = 0;
+  virtual Future<size_t> write(int fd, const void* data, size_t size) = 0;
 
   // see process/io.hpp
   virtual Future<Nothing> write(int fd, const std::string& data) = 0;
 
   // see process/io.hpp
   virtual Future<Nothing> redirect(int from, Option<int> to, size_t chunk) = 0;
-
-  virtual Future<short> do_poll(
-      const ConnectionHandle& conn_handle,
-      short events) = 0;
 
   virtual Future<size_t> do_read(
       const ConnectionHandle& conn_handle,
@@ -155,7 +151,7 @@ public:
 
       virtual Future<size_t> do_write(
       const ConnectionHandle& conn_handle,
-      void* data,
+      const void* data,
       size_t size) = 0;
 
 protected:
@@ -221,7 +217,7 @@ inline Future<Nothing> EventManager::conn_write(
 
 inline Future<size_t> EventManager::conn_write(
       const ConnectionHandle& conn_handle,
-      void* data,
+      const void* data,
       size_t size)
 {
   CHECK(singleton) << "write requires an initialized EventManager";

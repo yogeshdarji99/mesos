@@ -27,10 +27,12 @@ HttpProxy::~HttpProxy()
 {
   // Need to make sure response producers know not to continue to
   // create a response (streaming or otherwise).
+#if 0
   if (pipe.isSome()) {
     os::close(pipe.get());
   }
   pipe = None();
+#endif
 
   while (!items.empty()) {
     Item* item = items.front();
@@ -163,6 +165,8 @@ bool HttpProxy::process(const Future<Response>& future, const Request& request)
     // should be reported and no response sent.
     response.body.clear();
 
+    //TODO(jmlvanre): do we need to do this?
+#if 0
     // Make sure the pipe is nonblocking.
     Try<Nothing> nonblock = os::nonblock(response.pipe);
     if (nonblock.isError()) {
@@ -171,6 +175,7 @@ bool HttpProxy::process(const Future<Response>& future, const Request& request)
       ev_man->send(InternalServerError(), request, connection_handle);
       return true; // All done, can process next response.
     }
+#endif
 
     // While the user is expected to properly set a 'Content-Type'
     // header, we fill in (or overwrite) 'Transfer-Encoding' header.
@@ -182,10 +187,15 @@ bool HttpProxy::process(const Future<Response>& future, const Request& request)
         new HttpResponseEncoder(connection_handle, response, request),
         true);
 
-    pipe = response.pipe;
+    //pipe = response.pipe;
+    pipe_conn_handle = response.pipe_conn_handle;
 
+    ev_man->do_poll(pipe_conn_handle, io::READ).onAny(
+        defer(self(), &Self::stream, lambda::_1, request));
+#if 0
     io::poll(pipe.get(), io::READ).onAny(
         defer(self(), &Self::stream, lambda::_1, request));
+#endif
 
     return false; // Streaming, don't process next response (yet)!
   } else {
@@ -200,7 +210,9 @@ void HttpProxy::stream(const Future<short>& poll, const Request& request)
 {
   // TODO(benh): Use 'splice' on Linux.
 
+#if 0
   CHECK(pipe.isSome());
+#endif
 
   bool finished = false; // Whether we're done streaming.
 
@@ -209,6 +221,7 @@ void HttpProxy::stream(const Future<short>& poll, const Request& request)
     CHECK(poll.get() == io::READ);
     const size_t size = 4 * 1024; // 4K.
     char data[size];
+#if 0
     while (!finished) {
       ssize_t length = ::read(pipe.get(), data, size);
       if (length < 0 && (errno == EINTR)) {
@@ -244,6 +257,7 @@ void HttpProxy::stream(const Future<short>& poll, const Request& request)
             finished ? request.keepAlive : true);
       }
     }
+#endif
   } else if (poll.isFailed()) {
     VLOG(1) << "Failed to poll: " << poll.failure();
     ev_man->send(InternalServerError(), request, connection_handle);
@@ -255,8 +269,10 @@ void HttpProxy::stream(const Future<short>& poll, const Request& request)
   }
 
   if (finished) {
+#if 0
     os::close(pipe.get());
     pipe = None();
+#endif
     next();
   }
 }
