@@ -733,12 +733,15 @@ void Master::initialize()
   route("/slaves",
         Http::SLAVES_HELP,
         lambda::bind(&Http::slaves, http, lambda::_1));
-  route("/state.json",
-        None(),
-        lambda::bind(&Http::state, http, lambda::_1));
   route("/stats.json",
         None(),
         lambda::bind(&Http::stats, http, lambda::_1));
+  route("/state.json",
+        None(),
+        lambda::bind(&Http::state, http, lambda::_1));
+  route("/state-summary",
+        None(),
+        lambda::bind(&Http::stateSummary, http, lambda::_1));
   route("/tasks.json",
         Http::TASKS_HELP,
         lambda::bind(&Http::tasks, http, lambda::_1));

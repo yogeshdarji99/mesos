@@ -493,6 +493,10 @@ private:
     process::Future<process::http::Response> stats(
         const process::http::Request& request);
 
+    // /master/state-summary
+    process::Future<process::http::Response> stateSummary(
+        const process::http::Request& request);
+
     // /master/tasks.json
     process::Future<process::http::Response> tasks(
         const process::http::Request& request);
