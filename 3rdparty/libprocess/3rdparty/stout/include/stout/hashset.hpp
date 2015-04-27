@@ -30,6 +30,17 @@ template <typename Elem>
 class hashset : public boost::unordered_set<Elem>
 {
 public:
+  // TODO(jmlvanre): Introduce an empty set in a cleaner fashion. Once
+  // we can have implementation files we can use a static member that
+  // is just an empty hashset.
+  static const hashset<Elem>& EMPTY()
+  {
+    // Create a dangling pointer to avoid returning references to
+    // storage that may be 'finalized' in a non-deterministic order.
+    static hashset<Elem>* empty = new hashset<Elem>();
+    return *empty;
+  }
+
   // An explicit default constructor is needed so
   // 'const hashset<T> map;' is not an error.
   hashset() {}
