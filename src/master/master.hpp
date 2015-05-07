@@ -489,6 +489,10 @@ private:
     process::Future<process::http::Response> state(
         const process::http::Request& request);
 
+    // /master/state-summary
+    process::Future<process::http::Response> stateSummary(
+        const process::http::Request& request);
+
     // /master/stats.json
     process::Future<process::http::Response> stats(
         const process::http::Request& request);
