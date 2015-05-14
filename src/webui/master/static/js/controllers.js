@@ -13,15 +13,16 @@
 
   // Invokes the pailer for the specified host and path using the
   // specified window_title.
-  function pailer(host, path, window_title) {
-    var url = 'http://' + host + '/files/read.json?path=' + path;
+  function pailer(endpoint, path, window_title) {
+    // TODO(mlunoe): make relative urls for slaves and master
+    var url = '/mesos/' + endpoint + 'files/read.json?path=' + path;
     var pailer =
-      window.open('/static/pailer.html', url, 'width=580px, height=700px');
+      window.open('static/pailer.html', url, 'width=580px, height=700px');
 
     // Need to use window.onload instead of document.ready to make
     // sure the title doesn't get overwritten.
     pailer.onload = function() {
-      pailer.document.title = window_title + ' (' + host + ')';
+      pailer.document.title = window_title + ' (' + endpoint + ')';
     };
   }
 
@@ -52,28 +53,6 @@
     }
 
     $scope.state = JSON.parse(data);
-
-    // Determine if there is a leader (and redirect if not the leader).
-    if ($scope.state.leader) {
-
-      // Redirect if we aren't the leader.
-      if ($scope.state.leader != $scope.state.pid) {
-        $scope.redirect = 6000;
-        $("#not-leader-alert").removeClass("hide");
-
-        var countdown = function() {
-          if ($scope.redirect == 0) {
-            // TODO(benh): Use '$window'.
-            window.location = '/master/redirect';
-          } else {
-            $scope.redirect = $scope.redirect - 1000;
-            $timeout(countdown, 1000);
-          }
-        };
-        countdown();
-        return false; // Don't continue polling.
-      }
-    }
 
     // A cluster is named if the state returns a non-empty string name.
     // Track whether this cluster is named in a Boolean for display purposes.
@@ -342,7 +321,7 @@
         ).open();
       } else {
         pailer(
-            $scope.$location.host() + ':' + $scope.$location.port(),
+            '',
             '/master/log',
             'Mesos Master');
       }
@@ -394,9 +373,8 @@
       }
 
       var pid = $scope.slaves[$routeParams.slave_id].pid;
-      var hostname = $scope.slaves[$routeParams.slave_id].hostname;
       var id = pid.substring(0, pid.indexOf('@'));
-      var host = hostname + ":" + pid.substring(pid.lastIndexOf(':') + 1);
+      var host = 'slaves/' + $routeParams.slave_id + '/';
 
       $scope.log = function($event) {
         if (!$scope.state.external_log_file && !$scope.state.log_dir) {
@@ -415,7 +393,7 @@
         $top.start(host, $scope);
       }
 
-      $http.jsonp('http://' + host + '/' + id + '/state.json?jsonp=JSON_CALLBACK')
+      $http.jsonp('slaves/' + $routeParams.slave_id + id + '/state.json?jsonp=JSON_CALLBACK')
         .success(function (response) {
           $scope.state = response;
 
@@ -484,16 +462,15 @@
       }
 
       var pid = $scope.slaves[$routeParams.slave_id].pid;
-      var hostname = $scope.slaves[$routeParams.slave_id].hostname;
       var id = pid.substring(0, pid.indexOf('@'));
-      var host = hostname + ":" + pid.substring(pid.lastIndexOf(':') + 1);
+      var host = 'slaves/' + $routeParams.slave_id + '/';
 
       // Set up polling for the monitor if this is the first update.
       if (!$top.started()) {
         $top.start(host, $scope);
       }
 
-      $http.jsonp('http://' + host + '/' + id + '/state.json?jsonp=JSON_CALLBACK')
+      $http.jsonp(host + id + '/state.json?jsonp=JSON_CALLBACK')
         .success(function (response) {
           $scope.state = response;
 
@@ -557,16 +534,15 @@
       }
 
       var pid = $scope.slaves[$routeParams.slave_id].pid;
-      var hostname = $scope.slaves[$routeParams.slave_id].hostname;
       var id = pid.substring(0, pid.indexOf('@'));
-      var host = hostname + ":" + pid.substring(pid.lastIndexOf(':') + 1);
+      var host = 'slaves/' + $routeParams.slave_id + '/';
 
       // Set up polling for the monitor if this is the first update.
       if (!$top.started()) {
         $top.start(host, $scope);
       }
 
-      $http.jsonp('http://' + host + '/' + id + '/state.json?jsonp=JSON_CALLBACK')
+      $http.jsonp(host + id + '/state.json?jsonp=JSON_CALLBACK')
         .success(function (response) {
           $scope.state = response;
 
@@ -664,14 +640,12 @@
     }
 
     var pid = slave.pid;
-    var hostname = $scope.slaves[$routeParams.slave_id].hostname;
     var id = pid.substring(0, pid.indexOf('@'));
-    var port = pid.substring(pid.lastIndexOf(':') + 1);
-    var host = hostname + ":" + port;
+    var host = 'slaves/' + $routeParams.slave_id + '/';
 
     // Request slave details to get access to the route executor's "directory"
     // to navigate directly to the executor's sandbox.
-    $http.jsonp('http://' + host + '/' + id + '/state.json?jsonp=JSON_CALLBACK')
+    $http.jsonp(host + id + '/state.json?jsonp=JSON_CALLBACK')
       .success(function(response) {
 
         function matchFramework(framework) {
@@ -715,8 +689,7 @@
       .error(function(response) {
         $alert.danger({
           bullets: [
-            "The slave's hostname, '" + hostname + "', is not accessible from your network",
-            "The slave's port, '" + port + "', is not accessible from your network",
+            "The slave is not accessible",
             "The slave timed out or went offline"
           ],
           message: "Potential reasons:",
@@ -737,18 +710,13 @@
         $scope.slave_id = $routeParams.slave_id;
         $scope.path = $routeParams.path;
 
-        var pid = $scope.slaves[$routeParams.slave_id].pid;
-        var hostname = $scope.slaves[$routeParams.slave_id].hostname;
-        var id = pid.substring(0, pid.indexOf('@'));
-        var host = hostname + ":" + pid.substring(pid.lastIndexOf(':') + 1);
-        var url = 'http://' + host + '/files/browse.json?jsonp=JSON_CALLBACK';
-
-        $scope.slave_host = host;
+        var url = 'slaves/' + $scope.slave_id + '/files/browse.json?jsonp=JSON_CALLBACK';
 
         $scope.pail = function($event, path) {
-          pailer(host, path, decodeURIComponent(path));
+          pailer('slaves/' + $scope.slave_id + '/', path, decodeURIComponent(path));
         };
 
+        $scope.slave_host = 'slaves/' + $scope.slave_id + '/';
         // TODO(bmahler): Try to get the error code / body in the error callback.
         // This wasn't working with the current version of angular.
         $http.jsonp(url, {params: {path: $routeParams.path}})
