@@ -13,16 +13,15 @@
 
   // Invokes the pailer for the specified host and path using the
   // specified window_title.
-  function pailer(endpoint, path, window_title) {
-    // TODO(mlunoe): make relative urls for slaves and master
-    var url = '/mesos/' + endpoint + 'files/read.json?path=' + path;
+  function pailer(host, path, window_title) {
+    var url = host + 'files/read.json?path=' + path;
     var pailer =
       window.open('static/pailer.html', url, 'width=580px, height=700px');
 
     // Need to use window.onload instead of document.ready to make
     // sure the title doesn't get overwritten.
     pailer.onload = function() {
-      pailer.document.title = window_title + ' (' + endpoint + ')';
+      pailer.document.title = window_title + ' (' + host + ')';
     };
   }
 
@@ -321,7 +320,7 @@
         ).open();
       } else {
         pailer(
-            '',
+            '/mesos/',
             '/master/log',
             'Mesos Master');
       }
@@ -374,7 +373,7 @@
 
       var pid = $scope.slaves[$routeParams.slave_id].pid;
       var id = pid.substring(0, pid.indexOf('@'));
-      var host = 'slaves/' + $routeParams.slave_id + '/';
+      var host = '/slave/' + $routeParams.slave_id + '/';
 
       $scope.log = function($event) {
         if (!$scope.state.external_log_file && !$scope.state.log_dir) {
@@ -393,7 +392,7 @@
         $top.start(host, $scope);
       }
 
-      $http.jsonp('slaves/' + $routeParams.slave_id + id + '/state.json?jsonp=JSON_CALLBACK')
+      $http.jsonp('/slave/' + $routeParams.slave_id + '/' + id + '/state.json?jsonp=JSON_CALLBACK')
         .success(function (response) {
           $scope.state = response;
 
@@ -463,7 +462,7 @@
 
       var pid = $scope.slaves[$routeParams.slave_id].pid;
       var id = pid.substring(0, pid.indexOf('@'));
-      var host = 'slaves/' + $routeParams.slave_id + '/';
+      var host = '/slave/' + $routeParams.slave_id + '/';
 
       // Set up polling for the monitor if this is the first update.
       if (!$top.started()) {
@@ -535,7 +534,7 @@
 
       var pid = $scope.slaves[$routeParams.slave_id].pid;
       var id = pid.substring(0, pid.indexOf('@'));
-      var host = 'slaves/' + $routeParams.slave_id + '/';
+      var host = '/slave/' + $routeParams.slave_id + '/';
 
       // Set up polling for the monitor if this is the first update.
       if (!$top.started()) {
@@ -596,7 +595,7 @@
 
 
   // Reroutes a request like
-  // '/slaves/:slave_id/frameworks/:framework_id/executors/:executor_id/browse'
+  // '//slave/:slave_id/frameworks/:framework_id/executors/:executor_id/browse'
   // to the executor's sandbox. This requires a second request because the
   // directory to browse is known by the slave but not by the master. Request
   // the directory from the slave, and then redirect to it.
@@ -641,7 +640,7 @@
 
     var pid = slave.pid;
     var id = pid.substring(0, pid.indexOf('@'));
-    var host = 'slaves/' + $routeParams.slave_id + '/';
+    var host = '/slave/' + $routeParams.slave_id + '/';
 
     // Request slave details to get access to the route executor's "directory"
     // to navigate directly to the executor's sandbox.
@@ -679,10 +678,9 @@
               "'."
           );
         }
-
-        // Navigate to a path like '/slaves/:id/browse?path=%2Ftmp%2F', the
+        // Navigate to a path like '/slave/:id/browse?path=%2Ftmp%2F', the
         // recognized "browse" endpoint for a slave.
-        $location.path('/slaves/' + $routeParams.slave_id + '/browse')
+        $location.path('slaves/' + $routeParams.slave_id + '/browse')
           .search({path: executor.directory})
           .replace();
       })
@@ -710,13 +708,13 @@
         $scope.slave_id = $routeParams.slave_id;
         $scope.path = $routeParams.path;
 
-        var url = 'slaves/' + $scope.slave_id + '/files/browse.json?jsonp=JSON_CALLBACK';
+        var url = '/slave/' + $scope.slave_id + '/files/browse.json?jsonp=JSON_CALLBACK';
 
         $scope.pail = function($event, path) {
-          pailer('slaves/' + $scope.slave_id + '/', path, decodeURIComponent(path));
+          pailer('/slave/' + $scope.slave_id + '/', path, decodeURIComponent(path));
         };
 
-        $scope.slave_host = 'slaves/' + $scope.slave_id + '/';
+        $scope.slave_host = '/slave/' + $scope.slave_id + '/';
         // TODO(bmahler): Try to get the error code / body in the error callback.
         // This wasn't working with the current version of angular.
         $http.jsonp(url, {params: {path: $routeParams.path}})
