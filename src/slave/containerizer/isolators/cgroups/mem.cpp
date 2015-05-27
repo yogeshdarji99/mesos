@@ -244,6 +244,13 @@ Future<Option<CommandInfo>> CgroupsMemIsolatorProcess::prepare(
     return Failure("Container has already been prepared");
   }
 
+  Try<bool> exists = cgroups::exists(hierarchy, flags.cgroups_root);
+  if (exists.isError()) {
+    LOG(WARNING) << "Unable to check cgroup root: " << exists.error();
+  } else if (!exists.get()) {
+    LOG(WARNING) << "Cgroup root for memory disappeared!";
+  }
+
   // TODO(bmahler): Don't insert into 'infos' unless we create the
   // cgroup successfully. It's safe for now because 'cleanup' gets
   // called if we return a Failure, but cleanup will fail because the
@@ -254,7 +261,7 @@ Future<Option<CommandInfo>> CgroupsMemIsolatorProcess::prepare(
   infos[containerId] = info;
 
   // Create a cgroup for this container.
-  Try<bool> exists = cgroups::exists(hierarchy, info->cgroup);
+  exists = cgroups::exists(hierarchy, info->cgroup);
 
   if (exists.isError()) {
     return Failure("Failed to prepare isolator: " + exists.error());
@@ -262,7 +269,7 @@ Future<Option<CommandInfo>> CgroupsMemIsolatorProcess::prepare(
     return Failure("Failed to prepare isolator: cgroup already exists");
   }
 
-  Try<Nothing> create = cgroups::create(hierarchy, info->cgroup);
+  Try<Nothing> create = cgroups::create(hierarchy, info->cgroup, true);
   if (create.isError()) {
     return Failure("Failed to prepare isolator: " + create.error());
   }

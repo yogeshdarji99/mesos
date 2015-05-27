@@ -273,14 +273,26 @@ Future<Option<CommandInfo>> CgroupsCpushareIsolatorProcess::prepare(
   infos[containerId] = info;
 
   foreach (const string& subsystem, subsystems) {
-    Try<bool> exists = cgroups::exists(hierarchies[subsystem], info->cgroup);
+    Try<bool> exists =
+      cgroups::exists(hierarchies[subsystem], flags.cgroups_root);
+
+    if (exists.isError()) {
+      LOG(WARNING) << "Unable to check cgroup root for hierarchy '"
+                   << hierarchies[subsystem] << "':" << exists.error();
+    } else if (!exists.get()) {
+      LOG(WARNING) << "Cgroup root for hierarchy '" << hierarchies[subsystem]
+                   << "' disappeared!";
+    }
+
+    exists = cgroups::exists(hierarchies[subsystem], info->cgroup);
     if (exists.isError()) {
       return Failure("Failed to prepare isolator: " + exists.error());
     } else if (exists.get()) {
       return Failure("Failed to prepare isolator: cgroup already exists");
     }
 
-    Try<Nothing> create = cgroups::create(hierarchies[subsystem], info->cgroup);
+    Try<Nothing> create = cgroups::create(
+        hierarchies[subsystem], info->cgroup, true);
     if (create.isError()) {
       return Failure("Failed to prepare isolator: " + create.error());
     }
