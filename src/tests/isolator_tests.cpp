@@ -378,7 +378,8 @@ TEST_F(LimitedCpuIsolatorTest, ROOT_CGROUPS_Cfs)
   Try<Isolator*> isolator = CgroupsCpushareIsolatorProcess::create(flags);
   CHECK_SOME(isolator);
 
-  Try<Launcher*> launcher = LinuxLauncher::create(flags);
+  Try<Launcher*> launcher =
+    LinuxLauncher::create(flags, isolator.get()->namespaces().get());
   CHECK_SOME(launcher);
 
   // Set the executor's resources to 0.5 cpu.
@@ -488,7 +489,8 @@ TEST_F(LimitedCpuIsolatorTest, ROOT_CGROUPS_Cfs_Big_Quota)
   Try<Isolator*> isolator = CgroupsCpushareIsolatorProcess::create(flags);
   CHECK_SOME(isolator);
 
-  Try<Launcher*> launcher = LinuxLauncher::create(flags);
+  Try<Launcher*> launcher =
+    LinuxLauncher::create(flags, isolator.get()->namespaces().get());
   CHECK_SOME(launcher);
 
   // Set the executor's resources to 100.5 cpu.
@@ -571,7 +573,8 @@ TEST_F(LimitedCpuIsolatorTest, ROOT_CGROUPS_Pids_and_Tids)
   Try<Isolator*> isolator = CgroupsCpushareIsolatorProcess::create(flags);
   CHECK_SOME(isolator);
 
-  Try<Launcher*> launcher = LinuxLauncher::create(flags);
+  Try<Launcher*> launcher =
+    LinuxLauncher::create(flags, isolator.get()->namespaces().get());
   CHECK_SOME(launcher);
 
   ExecutorInfo executorInfo;
@@ -840,7 +843,8 @@ TEST_F(SharedFilesystemIsolatorTest, ROOT_RelativeVolume)
   Try<Isolator*> isolator = SharedFilesystemIsolatorProcess::create(flags);
   CHECK_SOME(isolator);
 
-  Try<Launcher*> launcher = LinuxLauncher::create(flags);
+  Try<Launcher*> launcher =
+    LinuxLauncher::create(flags, isolator.get()->namespaces().get());
   CHECK_SOME(launcher);
 
   // Use /var/tmp so we don't mask the work directory (under /tmp).
@@ -939,7 +943,8 @@ TEST_F(SharedFilesystemIsolatorTest, ROOT_AbsoluteVolume)
   Try<Isolator*> isolator = SharedFilesystemIsolatorProcess::create(flags);
   CHECK_SOME(isolator);
 
-  Try<Launcher*> launcher = LinuxLauncher::create(flags);
+  Try<Launcher*> launcher =
+    LinuxLauncher::create(flags, isolator.get()->namespaces().get());
   CHECK_SOME(launcher);
 
   // We'll mount the absolute test work directory as /var/tmp in the

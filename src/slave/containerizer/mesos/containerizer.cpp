@@ -158,14 +158,17 @@ Try<MesosContainerizer*> MesosContainerizer::create(
   }
 
 #ifdef __linux__
+  int namespaces = 0;
+  foreach (const Owned<Isolator>& isolator, isolators) {
+    namespaces |= isolator->namespaces().get();
+  }
+
   // Determine which launcher to use based on the isolation flag.
   Try<Launcher*> launcher =
-    (strings::contains(isolation, "cgroups") ||
-     strings::contains(isolation, "network/port_mapping") ||
-     strings::contains(isolation, "filesystem/shared") ||
-     strings::contains(isolation, "namespaces"))
-    ? LinuxLauncher::create(flags_)
+    (strings::contains(isolation, "cgroups") || namespaces)
+    ? LinuxLauncher::create(flags_, namespaces)
     : PosixLauncher::create(flags_);
+
 #else
   Try<Launcher*> launcher = PosixLauncher::create(flags_);
 #endif // __linux__

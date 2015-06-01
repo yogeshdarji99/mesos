@@ -30,7 +30,7 @@ namespace slave {
 class LinuxLauncher : public Launcher
 {
 public:
-  static Try<Launcher*> create(const Flags& flags);
+  static Try<Launcher*> create(const Flags& flags, int namespaces);
 
   virtual ~LinuxLauncher() {}
 
