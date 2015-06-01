@@ -81,6 +81,13 @@ public:
   explicit Isolator(process::Owned<IsolatorProcess> process);
   ~Isolator();
 
+  // Returns the namespaces required by the isolator. The namespaces
+  // are created while launching the executor.
+  // TODO(karya): Since namespaces are Linux-only, create a separate
+  // LinuxIsolator (and corresponding LinuxIsolatorProcess) class
+  // for Linux-specific isolators.
+  process::Future<int> namespaces();
+
   // Recover containers from the run states and the orphan containers
   // (known to the launcher but not known to the slave) detected by
   // the launcher.
@@ -135,6 +142,8 @@ class IsolatorProcess : public process::Process<IsolatorProcess>
 {
 public:
   virtual ~IsolatorProcess() {}
+
+  virtual process::Future<int> namespaces() { return 0; }
 
   virtual process::Future<Nothing> recover(
       const std::list<ExecutorRunState>& state,

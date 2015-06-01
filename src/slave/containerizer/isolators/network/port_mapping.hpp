@@ -154,6 +154,11 @@ public:
 
   virtual ~PortMappingIsolatorProcess() {}
 
+  virtual process::Future<int> namespaces()
+  {
+    return CLONE_NEWNET;
+  }
+
   virtual process::Future<Nothing> recover(
       const std::list<mesos::slave::ExecutorRunState>& states,
       const hashset<ContainerID>& orphans);

@@ -56,6 +56,11 @@ public:
 
   virtual ~NamespacesPidIsolatorProcess() {}
 
+  virtual process::Future<int> namespaces()
+  {
+    return CLONE_NEWPID | CLONE_NEWNS;
+  }
+
   virtual process::Future<Nothing> recover(
       const std::list<mesos::slave::ExecutorRunState>& states,
       const hashset<ContainerID>& orphans);
