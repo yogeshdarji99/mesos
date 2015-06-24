@@ -220,51 +220,51 @@ The following snippet describes the implementation of a module named
 "org_apache_mesos_bar" of "TestModule" kind:
 
 ~~~{.cpp}
-    #include <iostream>
-    #include "test_module.hpp"
+#include <iostream>
+#include "test_module.hpp"
 
-    class TestModuleImpl : public TestModule
-    {
-    public:
-      TestModuleImpl()
-      {
-        std::cout << "HelloWorld!" << std::endl;
-      }
+class TestModuleImpl : public TestModule
+{
+public:
+  TestModuleImpl()
+  {
+    std::cout << "HelloWorld!" << std::endl;
+  }
 
-      virtual int foo(char a, long b)
-      {
-        return a + b;
-      }
+  virtual int foo(char a, long b)
+  {
+    return a + b;
+  }
 
-      virtual int bar(float a, double b)
-      {
-        return a * b;
-      }
-    };
+  virtual int bar(float a, double b)
+  {
+    return a * b;
+  }
+};
 
-    static TestModule* create()
-    {
-        return new TestModule();
-    }
+static TestModule* create()
+{
+    return new TestModule();
+}
 
-    static bool compatible()
-    {
-      return true;
-    }
+static bool compatible()
+{
+  return true;
+}
 
-    // Declares a module named 'org_apache_mesos_TestModule' of
-    // 'TestModule' kind.
-    // Mesos core binds the module instance pointer as needed.
-    // The compatible() hook is provided by the module for compatibility checks.
-    // The create() hook returns an object of type 'TestModule'.
-    mesos::modules::Module<TestModule> org_apache_mesos_TestModule(
-        MESOS_MODULE_API_VERSION,
-        MESOS_VERSION,
-        "Apache Mesos",
-        "modules@mesos.apache.org",
-        "This is a test module.",
-        compatible,
-        create);
+// Declares a module named 'org_apache_mesos_TestModule' of
+// 'TestModule' kind.
+// Mesos core binds the module instance pointer as needed.
+// The compatible() hook is provided by the module for compatibility checks.
+// The create() hook returns an object of type 'TestModule'.
+mesos::modules::Module<TestModule> org_apache_mesos_TestModule(
+    MESOS_MODULE_API_VERSION,
+    MESOS_VERSION,
+    "Apache Mesos",
+    "modules@mesos.apache.org",
+    "This is a test module.",
+    compatible,
+    create);
 ~~~
 
 ### Building a module
