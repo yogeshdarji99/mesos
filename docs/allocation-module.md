@@ -33,36 +33,36 @@ Once a custom allocator has been written, the next step is to override the built
 
 An allocator module is a factory function and a module description, as defined in `mesos/module/allocator.hpp`. Assuming the allocation logic is implemented by the `ExternalAllocator` class declared in `external_allocator.hpp`, the following snippet describes the implementation of an allocator module named `ExternalAllocatorModule`:
 
-```
-#include <mesos/master/allocator.hpp>
-#include <mesos/module/allocator.hpp>
-#include <stout/try.hpp>
+~~~{.cpp}
+    #include <mesos/master/allocator.hpp>
+    #include <mesos/module/allocator.hpp>
+    #include <stout/try.hpp>
 
-#include "external_allocator.hpp"
+    #include "external_allocator.hpp"
 
-using namespace mesos;
-using mesos::master::allocator::Allocator;
-using mesos::internal::master::allocator::HierarchicalDRFAllocator;
+    using namespace mesos;
+    using mesos::master::allocator::Allocator;
+    using mesos::internal::master::allocator::HierarchicalDRFAllocator;
 
-static Allocator* createExternalAllocator(const Parameters& parameters)
-{
-  Try<Allocator*> allocator = ExternalAllocator::create();
-  if (allocator.isError()) {
-    return NULL;
-  }
+    static Allocator* createExternalAllocator(const Parameters& parameters)
+    {
+      Try<Allocator*> allocator = ExternalAllocator::create();
+      if (allocator.isError()) {
+        return NULL;
+      }
 
-  return allocator.get();
-}
+      return allocator.get();
+    }
 
-// Declares an ExternalAllocator module named 'ExternalAllocatorModule'.
-mesos::modules::Module<Allocator> ExternalAllocatorModule(
-    MESOS_MODULE_API_VERSION,
-    MESOS_VERSION,
-    "Mesos Contributor",
-    "engineer@example.com",
-    "External Allocator module.",
-    NULL,
-    createExternalAllocator);
-```
+    // Declares an ExternalAllocator module named 'ExternalAllocatorModule'.
+    mesos::modules::Module<Allocator> ExternalAllocatorModule(
+        MESOS_MODULE_API_VERSION,
+        MESOS_VERSION,
+        "Mesos Contributor",
+        "engineer@example.com",
+        "External Allocator module.",
+        NULL,
+        createExternalAllocator);
+~~~
 
 Refer to the [Mesos Modules documentation](http://mesos.apache.org/documentation/latest/modules/) for instructions how to compile and load a module in Mesos master.
