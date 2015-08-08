@@ -188,6 +188,13 @@
   mesosApp.controller('MainCntl', [
       '$scope', '$http', '$location', '$timeout', '$modal',
       function($scope, $http, $location, $timeout, $modal) {
+
+    // Redirect from old mesos ui location to new dcos mesos ui location
+    if ($location.port() === 5050) {
+      var url = $location.protocol() + "://" + $location.host() + "/mesos";
+      window.location = url;
+    }
+
     $scope.doneLoading = true;
 
     // Adding bindings into scope so that they can be used from within
