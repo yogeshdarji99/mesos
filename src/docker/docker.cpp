@@ -422,6 +422,12 @@ Future<Nothing> Docker::run(
     argv.push_back(variable.name() + "=" + variable.value());
   }
 
+  Option<string> libprocessIP = os::getenv("LIBPROCESS_IP");
+  if (libprocessIP.isSome()) {
+    argv.push_back("-e");
+    argv.push_back("LIBPROCESS_IP=" + libprocessIP.get());
+  }
+
   argv.push_back("-e");
   argv.push_back("MESOS_SANDBOX=" + mappedDirectory);
   argv.push_back("-e");
