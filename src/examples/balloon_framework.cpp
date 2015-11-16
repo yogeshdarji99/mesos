@@ -134,7 +134,7 @@ public:
       std::cout << "Message: " << status.message() << std::endl;
     }
 
-    if (protobuf::isTerminalState(status.state())) {
+    if (internal::protobuf::isTerminalState(status.state())) {
       // NOTE: We expect TASK_FAILED here. The abort here ensures the shell
       // script invoking this test, considers the test result as 'PASS'.
       if (status.state() == TASK_FAILED) {
