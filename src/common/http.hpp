@@ -24,6 +24,7 @@
 
 #include <stout/hashmap.hpp>
 #include <stout/json.hpp>
+#include <stout/jpc.hpp>
 #include <stout/protobuf.hpp>
 
 namespace mesos {
@@ -73,8 +74,18 @@ Try<Message> deserialize(
 
 
 JSON::Object model(const Resources& resources);
+
+extern const JPC::detail::DynamicObject<Resources> RESOURCES_MODEL;
+
 JSON::Object model(const hashmap<std::string, Resources>& roleResources);
+
+extern const JPC::detail::DynamicObject<hashmap<std::string, Resources>>
+  ROLE_RESOURCES_MODEL;
+
 JSON::Object model(const Attributes& attributes);
+
+extern const JPC::detail::DynamicObject<Attributes> ATTRIBUTES_MODEL;
+
 JSON::Object model(const CommandInfo& command);
 JSON::Object model(const ExecutorInfo& executorInfo);
 JSON::Array model(const Labels& labels);

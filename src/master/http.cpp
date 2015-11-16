@@ -40,6 +40,7 @@
 #include <stout/foreach.hpp>
 #include <stout/hashmap.hpp>
 #include <stout/hashset.hpp>
+#include <stout/jpc.hpp>
 #include <stout/json.hpp>
 #include <stout/lambda.hpp>
 #include <stout/net.hpp>
@@ -113,6 +114,197 @@ using mesos::internal::model;
 using process::http::Response;
 using process::http::Request;
 using process::Owned;
+using process::Time;
+
+
+struct deref
+{
+  template <typename T>
+  const T& operator()(const T* value) const
+  {
+    return *value;
+  }
+
+  template <typename T>
+  T& operator()(const std::shared_ptr<T>& value) const
+  {
+    return *value;
+  }
+
+  template <typename T>
+  T& operator()(const std::unique_ptr<T>& value) const
+  {
+    return *value;
+  }
+};
+
+struct keys {
+  template <typename T, typename U>
+  const T& operator()(const std::pair<T, U>& pair) const
+  {
+    return std::get<0>(pair);
+  }
+};
+
+struct values
+{
+  template <typename T, typename U>
+  const U& operator()(const std::pair<T, U>& pair) const
+  {
+    return std::get<1>(pair);
+  }
+};
+
+static const auto EXECUTOR_ID_MODEL = JPC::string << &ExecutorID::value;
+static const auto FRAMEWORK_ID_MODEL = JPC::string << &FrameworkID::value;
+static const auto OFFER_ID_MODEL = JPC::string << &OfferID::value;
+static const auto SLAVE_ID_MODEL = JPC::string << &SlaveID::value;
+static const auto TASK_ID_MODEL = JPC::string << &TaskID::value;
+static const auto TIME_MODEL = JPC::number << &Time::secs;
+
+static const auto LABELS_MODEL = JPC::array(JPC::protobuf) << &Labels::labels;
+
+static const auto NETWORK_INFO_MODEL = JPC::object<NetworkInfo>(
+    JPC::field(
+        JPC::optional(JPC::string),
+        "ip_address",
+        [](const NetworkInfo& info) {
+          return info.has_ip_address() ? info.ip_address()
+                                       : Option<string>::none();
+        }),
+    JPC::field(
+        JPC::optional(JPC::array(JPC::string)),
+        "groups",
+        [](const NetworkInfo& info) {
+          return info.groups().size() > 0
+                   ? info.groups()
+                   : Option<RepeatedPtrField<string>>::none();
+        }),
+    JPC::field(
+        JPC::optional(LABELS_MODEL),
+        "labels",
+        [](const NetworkInfo& info) {
+          return info.has_labels() ? info.labels() : Option<Labels>::none();
+        }),
+    JPC::field(
+        JPC::optional(JPC::array(JPC::protobuf)),
+        "ip_addresses",
+        [](const NetworkInfo& info) {
+          return info.ip_addresses().size() <= 0
+                   ? info.ip_addresses()
+                   : Option<RepeatedPtrField<NetworkInfo::IPAddress>>::none();
+        }));
+
+
+static const auto CONTAINER_STATUS_MODEL = JPC::object<ContainerStatus>(
+    JPC::field(
+        JPC::optional(JPC::array(NETWORK_INFO_MODEL)),
+        "network_infos",
+        [](const ContainerStatus& status) {
+          return status.network_infos().size() > 0
+                   ? status.network_infos()
+                   : Option<RepeatedPtrField<NetworkInfo>>::none();
+        }));
+
+
+static const auto TASK_STATE_MODEL = JPC::string << &TaskState_Name;
+
+
+static const auto TASK_STATUS_MODEL = JPC::object<TaskStatus>(
+    JPC::field(TASK_STATE_MODEL, "state", &TaskStatus::state),
+    JPC::field(JPC::number, "timestamp", &TaskStatus::timestamp),
+    JPC::field(
+        JPC::optional(LABELS_MODEL),
+        "labels",
+        [](const TaskStatus& status) {
+          return status.has_labels() ? status.labels() : Option<Labels>::none();
+        }),
+    JPC::field(
+        JPC::optional(CONTAINER_STATUS_MODEL),
+        "container_status",
+        [](const TaskStatus& status) {
+          return status.has_container_status()
+                   ? status.container_status()
+                   : Option<ContainerStatus>::none();
+        }));
+
+
+static const auto TASK_MODEL = JPC::object<Task>(
+    JPC::field(TASK_ID_MODEL, "id", &Task::task_id),
+    JPC::field(JPC::string, "name", &Task::name),
+    JPC::field(FRAMEWORK_ID_MODEL, "framework_id", &Task::framework_id),
+    JPC::field(
+        JPC::string,
+        "executor_id",
+        [](const Task& task) {
+          return task.has_executor_id() ? task.executor_id().value() : "";
+        }),
+    JPC::field(SLAVE_ID_MODEL, "slave_id", &Task::slave_id),
+    JPC::field(TASK_STATE_MODEL, "state", &Task::state),
+    JPC::field(RESOURCES_MODEL, "resources", &Task::resources),
+    JPC::field(JPC::array(TASK_STATUS_MODEL), "statuses", &Task::statuses),
+    JPC::field(
+        JPC::optional(LABELS_MODEL),
+        "labels",
+        [](const Task& task) {
+          return task.has_labels() ? task.labels() : Option<Labels>::none();
+        }),
+    JPC::field(JPC::optional(JPC::protobuf), "discovery", [](const Task& task) {
+      return task.has_discovery() ? task.discovery()
+                                  : Option<DiscoveryInfo>::none();
+    }));
+
+
+static const auto ENVIRONMENT_VARIABLE_MODEL =
+  JPC::object<Environment_Variable>(
+      JPC::field(JPC::string, "name", &Environment_Variable::name),
+      JPC::field(JPC::string, "value", &Environment_Variable::value));
+
+
+static const auto ENVIRONMENT_MODEL = JPC::object<Environment>(
+    JPC::field(
+        JPC::array(ENVIRONMENT_VARIABLE_MODEL),
+        "variables",
+        &Environment::variables));
+
+
+static const auto COMMAND_INFO_URI_MODEL = JPC::object<CommandInfo_URI>(
+    JPC::field(JPC::string, "value", &CommandInfo_URI::value),
+    JPC::field(JPC::boolean, "executable", &CommandInfo_URI::executable));
+
+
+static const auto COMMAND_INFO_MODEL = JPC::object<CommandInfo>(
+    JPC::field(
+        JPC::optional(JPC::boolean),
+        "shell",
+        [](const CommandInfo& command) {
+          return command.has_shell() ? command.shell() : Option<bool>::none();
+        }),
+    JPC::field(
+        JPC::optional(JPC::string),
+        "value",
+        [](const CommandInfo& command) {
+          return command.has_value() ? command.value() : Option<string>::none();
+        }),
+    JPC::field(JPC::array(JPC::string), "argv", &CommandInfo::arguments),
+    JPC::field(
+        JPC::optional(ENVIRONMENT_MODEL),
+        "environment",
+        [](const CommandInfo& command) {
+          return command.has_environment() ? command.environment()
+                                           : Option<Environment>::none();
+        }),
+    JPC::field(JPC::array(COMMAND_INFO_URI_MODEL), "uris", &CommandInfo::uris));
+
+
+/*
+static const auto EXECUTOR_INFO_MODEL = JPC::object<ExecutorInfo>(
+    JPC::field(EXECUTOR_ID_MODEL, "executor_id", &ExecutorInfo::executor_id),
+    JPC::field(JPC::string, "name", &ExecutorInfo::name),
+    JPC::field(FRAMEWORK_ID_MODEL, "framework_id", &ExecutorInfo::framework_id),
+    JPC::field(COMMAND_INFO_MODEL, "command", &ExecutorInfo::command),
+    JPC::field(RESOURCES_MODEL, "resources", &ExecutorInfo::resources));
+*/
 
 
 // TODO(bmahler): Kill these in favor of automatic Proto->JSON Conversion (when
@@ -129,6 +321,13 @@ JSON::Object model(const Offer& offer)
   object.values["resources"] = model(offer.resources());
   return object;
 }
+
+
+static const auto OFFER_MODEL = JPC::object<Offer>(
+    JPC::field(OFFER_ID_MODEL, "id", &Offer::id),
+    JPC::field(FRAMEWORK_ID_MODEL, "framework_id", &Offer::framework_id),
+    JPC::field(SLAVE_ID_MODEL, "slave_id", &Offer::slave_id),
+    JPC::field(RESOURCES_MODEL, "resources", &Offer::resources));
 
 
 // Returns a JSON object summarizing some important fields in a
@@ -166,6 +365,38 @@ JSON::Object summarize(const Framework& framework)
 
   return object;
 }
+
+
+// Returns a JSON object summarizing some important fields in a
+// Framework.
+static const auto FRAMEWORK_SUMMARY = JPC::object<Framework>(
+    JPC::field(FRAMEWORK_ID_MODEL, "id", &Framework::id),
+    JPC::field(JPC::string << &FrameworkInfo::name, "name", &Framework::info),
+    // Omit pid for http frameworks.
+    JPC::field(JPC::optional(JPC::string), "pid", &Framework::pid),
+    // TODO(bmahler): Use these in the webui.
+    JPC::field(
+        RESOURCES_MODEL, "used_resources", &Framework::totalUsedResources),
+    JPC::field(
+        RESOURCES_MODEL,
+        "offered_resources",
+        &Framework::totalOfferedResources),
+    JPC::field(
+        JPC::array(
+            JPC::string << [](const FrameworkInfo::Capability& capability) {
+              return FrameworkInfo::Capability::Type_Name(capability.type());
+            }),
+        "capabilities",
+        [](const Framework& framework) {
+          return framework.info.capabilities();
+        }),
+    JPC::field(
+        JPC::string << &FrameworkInfo::hostname, "hostname", &Framework::info),
+    JPC::field(
+        JPC::string << &FrameworkInfo::webui_url,
+        "webui_url",
+        &Framework::info),
+    JPC::field(JPC::boolean, "active", &Framework::active));
 
 
 // Returns a JSON object modeled on a Framework.
@@ -271,6 +502,108 @@ JSON::Object model(const Framework& framework)
 }
 
 
+static const auto FRAMEWORK_MODEL =
+  FRAMEWORK_SUMMARY +
+  JPC::object<Framework>(
+      JPC::field(JPC::string << &FrameworkInfo::user, "user", &Framework::info),
+      JPC::field(
+          JPC::number << &FrameworkInfo::failover_timeout,
+          "failover_timeout",
+          &Framework::info),
+      JPC::field(
+          JPC::boolean << &FrameworkInfo::checkpoint,
+          "checkpoint",
+          &Framework::info),
+      JPC::field(JPC::string << &FrameworkInfo::role, "role", &Framework::info),
+      JPC::field(TIME_MODEL, "registered_time", &Framework::registeredTime),
+      JPC::field(TIME_MODEL, "unregistered_time", &Framework::unregisteredTime),
+      JPC::field(JPC::boolean, "active", &Framework::active),
+      // TODO(bmahler): Consider deprecating this in favor of the split
+      // used and offered resources added in 'summarize'.
+      JPC::field(
+          RESOURCES_MODEL,
+          "resources",
+          [](const Framework& framework) {
+            return framework.totalUsedResources +
+                   framework.totalOfferedResources;
+          }),
+      // TODO(benh): Consider making reregisteredTime an Option.
+      JPC::field(
+          JPC::optional(TIME_MODEL),
+          "reregistered_time",
+          [](const Framework& framework) {
+            return framework.registeredTime != framework.reregisteredTime
+                     ? framework.reregisteredTime
+                     : Option<Time>::none();
+          }),
+      // Model all of the tasks associated with a framework.
+      JPC::field(
+          JPC::array(TASK_MODEL),
+          "tasks",
+          [](const Framework& framework) {
+            std::vector<Task> tasks;
+            tasks.reserve(
+                framework.pendingTasks.size() + framework.tasks.size());
+            foreachvalue (const TaskInfo& taskInfo, framework.pendingTasks) {
+              tasks.emplace_back();
+              Task& task = tasks.back();
+              task.set_name(taskInfo.name());
+              task.mutable_task_id()->CopyFrom(taskInfo.task_id());
+              task.mutable_framework_id()->CopyFrom(framework.id());
+              if (taskInfo.has_executor()) {
+                task.mutable_executor_id()->CopyFrom(
+                    taskInfo.executor().executor_id());
+              }
+              task.mutable_slave_id()->CopyFrom(taskInfo.slave_id());
+              task.set_state(TASK_STAGING);
+              task.mutable_resources()->CopyFrom(taskInfo.resources());
+            }
+            foreachvalue (Task* task, framework.tasks) {
+              tasks.push_back(*task);
+            }
+            return tasks;
+          }),
+      // Model all of the completed tasks of a framework.
+      JPC::field(
+          JPC::array(TASK_MODEL << deref{}),
+          "completed_tasks",
+          &Framework::completedTasks),
+      // Model all of the offers associated with a framework.
+      JPC::field(
+          JPC::array(OFFER_MODEL << deref{}), "offers", &Framework::offers),
+      // Model all of the executors of a framework.
+      /*
+      JPC::field(JPC::array(EXECUTOR_INFO_MODEL +
+                            JPC::object<SlaveID>(JPC::field(
+                                JPC::string,
+                                "slave_id",
+                                [](const SlaveID& slaveId) {
+                                  return slaveId.value();
+                                }))),
+          "executors",
+          [](const Framework& framework) {
+            std::vector<std::pair<ExecutorInfo, SlaveID>> result;
+            foreachpair (
+                const SlaveID& slaveId,
+                const auto& executors,
+                framework.executors) {
+              foreachvalue (const ExecutorInfo& executor, executors) {
+                result.emplace_back(executor, slaveId);
+              }
+            }
+            return result;
+          }),
+      */
+      // Model all of the labels associated with a framework.
+      JPC::field(
+          JPC::optional(LABELS_MODEL),
+          "labels",
+          [](const Framework& framework) {
+            return framework.info.has_labels() ? framework.info.labels()
+                                               : Option<Labels>::none();
+          }));
+
+
 // Returns a JSON object summarizing some important fields in a Slave.
 JSON::Object summarize(const Slave& slave)
 {
@@ -299,6 +632,38 @@ JSON::Object summarize(const Slave& slave)
 }
 
 
+static const auto AGENT_SUMMARY = JPC::object<Slave>(
+    JPC::field(SLAVE_ID_MODEL, "id", &Slave::id),
+    JPC::field(JPC::string, "pid", &Slave::pid),
+    JPC::field(JPC::string << &SlaveInfo::hostname, "hostname", &Slave::info),
+    JPC::field(TIME_MODEL, "registered_time", &Slave::registeredTime),
+    JPC::field(
+        JPC::optional(TIME_MODEL),
+        "reregistered_time",
+        &Slave::reregisteredTime),
+    JPC::field(RESOURCES_MODEL, "resources", &Slave::totalResources),
+    JPC::field(
+        RESOURCES_MODEL,
+        "used_resources",
+        [](const Slave& slave) {
+          return Resources::sum(slave.usedResources);
+        }),
+    JPC::field(RESOURCES_MODEL, "offered_resources", &Slave::offeredResources),
+    JPC::field(
+        ROLE_RESOURCES_MODEL << &Resources::reserved,
+        "reserved_resources",
+        &Slave::totalResources),
+    JPC::field(
+        RESOURCES_MODEL << &Resources::unreserved,
+        "unreserved_resources",
+        &Slave::totalResources),
+    JPC::field(
+        ATTRIBUTES_MODEL << &SlaveInfo::attributes, "attributes", &Slave::info),
+    JPC::field(JPC::boolean, "active", &Slave::active),
+    JPC::field(JPC::string, "version", &Slave::version)
+);
+
+
 // Returns a JSON object modeled after a Slave.
 // For now there are no additional fields being added to those
 // generated by 'summarize'.
@@ -306,6 +671,9 @@ JSON::Object model(const Slave& slave)
 {
   return summarize(slave);
 }
+
+
+static const auto AGENT_MODEL = AGENT_SUMMARY;
 
 
 // Returns a JSON object modeled after a Role.
@@ -328,6 +696,18 @@ JSON::Object model(const Role& role)
 
   return object;
 }
+
+
+static const auto ROLE_MODEL = JPC::object<Role>(
+    JPC::field(
+        JPC::string, "name", [](const Role& role) { return role.info.name(); }),
+    JPC::field(
+        JPC::number,
+        "weight",
+        [](const Role& role) { return role.info.weight(); }),
+    JPC::field(RESOURCES_MODEL, "resources", &Role::resources),
+    JPC::field(
+        JPC::array(FRAMEWORK_ID_MODEL), "frameworks", &Role::frameworks));
 
 
 void Master::Http::log(const Request& request)
@@ -1123,139 +1503,127 @@ Future<Response> Master::Http::state(const Request& request) const
 {
   CALLGRIND_START_INSTRUMENTATION;
   CALLGRIND_ZERO_STATS;
-  JSON::Object object;
-  object.values["version"] = MESOS_VERSION;
-
-  if (build::GIT_SHA.isSome()) {
-    object.values["git_sha"] = build::GIT_SHA.get();
-  }
-
-  if (build::GIT_BRANCH.isSome()) {
-    object.values["git_branch"] = build::GIT_BRANCH.get();
-  }
-
-  if (build::GIT_TAG.isSome()) {
-    object.values["git_tag"] = build::GIT_TAG.get();
-  }
-
-  object.values["build_date"] = build::DATE;
-  object.values["build_time"] = build::TIME;
-  object.values["build_user"] = build::USER;
-  object.values["start_time"] = master->startTime.secs();
-
-  if (master->electedTime.isSome()) {
-    object.values["elected_time"] = master->electedTime.get().secs();
-  }
-
-  object.values["id"] = master->info().id();
-  object.values["pid"] = string(master->self());
-  object.values["hostname"] = master->info().hostname();
-  object.values["activated_slaves"] = master->_slaves_active();
-  object.values["deactivated_slaves"] = master->_slaves_inactive();
-
-  if (master->flags.cluster.isSome()) {
-    object.values["cluster"] = master->flags.cluster.get();
-  }
-
-  if (master->leader.isSome()) {
-    object.values["leader"] = master->leader.get().pid();
-  }
-
-  if (master->flags.log_dir.isSome()) {
-    object.values["log_dir"] = master->flags.log_dir.get();
-  }
-
-  if (master->flags.external_log_file.isSome()) {
-    object.values["external_log_file"] = master->flags.external_log_file.get();
-  }
-
-  {
-    JSON::Object flags;
-    foreachpair (const string& name, const flags::Flag& flag, master->flags) {
-      Option<string> value = flag.stringify(master->flags);
-      if (value.isSome()) {
-        flags.values[name] = value.get();
-      }
-    }
-    object.values["flags"] = std::move(flags);
-  }
-
-  // Model all of the slaves.
-  {
-    JSON::Array array;
-    array.values.reserve(master->slaves.registered.size()); // MESOS-2353.
-
-    foreachvalue (Slave* slave, master->slaves.registered) {
-      array.values.push_back(model(*slave));
-    }
-
-    object.values["slaves"] = std::move(array);
-  }
-
-  // Model all of the frameworks.
-  {
-    JSON::Array array;
-    array.values.reserve(master->frameworks.registered.size()); // MESOS-2353.
-
-    foreachvalue (Framework* framework, master->frameworks.registered) {
-      array.values.push_back(model(*framework));
-    }
-
-    object.values["frameworks"] = std::move(array);
-  }
-
-  // Model all of the completed frameworks.
-  {
-    JSON::Array array;
-    array.values.reserve(master->frameworks.completed.size()); // MESOS-2353.
-
-    foreach (const std::shared_ptr<Framework>& framework,
-             master->frameworks.completed) {
-      array.values.push_back(model(*framework));
-    }
-
-    object.values["completed_frameworks"] = std::move(array);
-  }
-
-  // Model all of the orphan tasks.
-  {
-    JSON::Array array;
-
-    // Find those orphan tasks.
-    foreachvalue (const Slave* slave, master->slaves.registered) {
-      typedef hashmap<TaskID, Task*> TaskMap;
-      foreachvalue (const TaskMap& tasks, slave->tasks) {
-        foreachvalue (const Task* task, tasks) {
-          CHECK_NOTNULL(task);
-          if (!master->frameworks.registered.contains(task->framework_id())) {
-            array.values.push_back(model(*task));
+  static const auto flags_model = JPC::dynamic_object<Flags>(
+      [](JPC::writer::Object& object, const Flags& flags) {
+        foreachpair (const string& name, const flags::Flag& flag, flags) {
+          Option<string> value = flag.stringify(flags);
+          if (value.isSome()) {
+            object.field(JPC::string, name, value.get());
           }
         }
-      }
-    }
-
-    object.values["orphan_tasks"] = std::move(array);
-  }
-
-  // Model all currently unregistered frameworks.
-  // This could happen when the framework has yet to re-register
-  // after master failover.
-  {
-    JSON::Array array;
-
-    // Find unregistered frameworks.
-    foreachvalue (const Slave* slave, master->slaves.registered) {
-      foreachkey (const FrameworkID& frameworkId, slave->tasks) {
-        if (!master->frameworks.registered.contains(frameworkId)) {
-          array.values.push_back(frameworkId.value());
-        }
-      }
-    }
-
-    object.values["unregistered_frameworks"] = std::move(array);
-  }
-
-  auto ok = OK(object, request.url.query.get("jsonp"));
+      });
+  static const auto schema = JPC::object<Master>(
+      JPC::field(JPC::string, "version", [] { return MESOS_VERSION; }),
+      JPC::field(
+          JPC::optional(JPC::string), "git_sha", [] { return build::GIT_SHA; }),
+      JPC::field(
+          JPC::optional(JPC::string),
+          "git_branch",
+          [] { return build::GIT_BRANCH; }),
+      JPC::field(
+          JPC::optional(JPC::string), "git_tag", [] { return build::GIT_TAG; }),
+      JPC::field(JPC::string, "build_date", [] { return build::DATE; }),
+      JPC::field(JPC::number, "build_time", [] { return build::TIME; }),
+      JPC::field(JPC::string, "build_user", [] { return build::USER; }),
+      JPC::field(TIME_MODEL, "start_time", &Master::startTime),
+      JPC::field(
+          JPC::optional(JPC::number),
+          "elected_time",
+          [](const Master& master) {
+            return master.electedTime.isSome() ? master.electedTime.get().secs()
+                                               : Option<double>::none();
+          }),
+      JPC::field(JPC::string << &MasterInfo::id, "id", &Master::info),
+      JPC::field(JPC::string, "pid", &Master::self),
+      JPC::field(
+          JPC::string << &MasterInfo::hostname, "hostname", &Master::info),
+      JPC::field(
+          JPC::number,
+          "activated_slaves",
+          [](const Master& master) {
+            return const_cast<Master&>(master)._slaves_active();
+          }),
+      JPC::field(
+          JPC::number,
+          "deactivated_slaves",
+          [](const Master& master) {
+            return const_cast<Master&>(master)._slaves_inactive();
+          }),
+      JPC::field(
+          JPC::optional(JPC::string),
+          "cluster",
+        [](const Master& master) { return master.flags.cluster; }),
+      JPC::field(
+          JPC::optional(JPC::string),
+          "leader",
+          [](const Master& master) {
+             return master.leader.isSome() ? master.leader.get().pid()
+                                           : Option<string>::none();
+          }),
+      JPC::field(
+          JPC::optional(JPC::string),
+          "log_dir",
+          [](const Master& master) { return master.flags.log_dir; }),
+      JPC::field(
+          JPC::optional(JPC::string),
+          "external_log_file",
+          [](const Master& master) { return master.flags.external_log_file; }),
+      JPC::field(flags_model, "flags", &Master::flags),
+      JPC::field(
+          JPC::array(AGENT_MODEL << deref{} << values{})
+              << &Master::Slaves::registered,
+          "slaves",
+          &Master::slaves),
+      JPC::field(
+          JPC::array(FRAMEWORK_MODEL << deref{} << values{})
+              << &Master::Frameworks::registered,
+          "frameworks",
+          &Master::frameworks),
+      JPC::field(
+          JPC::array(FRAMEWORK_MODEL << deref{})
+              << &Master::Frameworks::completed,
+          "completed_frameworks",
+          &Master::frameworks),
+      JPC::field(
+          JPC::array(TASK_MODEL << deref{}),
+          "orphan_tasks",
+          [](const Master &master) {
+            std::vector<const Task*> orphan_tasks;
+            // Find those orphan tasks.
+            foreachvalue (const Slave* slave, master.slaves.registered) {
+              typedef hashmap<TaskID, Task*> taskMap;
+              foreachvalue (const taskMap& tasks, slave->tasks) {
+                foreachvalue (const Task* task, tasks) {
+                  CHECK_NOTNULL(task);
+                  if (!master.frameworks.registered.contains(
+                          task->framework_id())) {
+                    orphan_tasks.push_back(task);
+                  }
+                }
+              }
+            }
+            return orphan_tasks;
+          }),
+      // Model all currently unregistered frameworks.
+      // This could happen when the framework has yet to re-register
+      // after master failover.
+      JPC::field(
+          JPC::array(FRAMEWORK_ID_MODEL),
+          "unregistered_frameworks",
+          [](const Master &master) {
+            std::vector<FrameworkID> frameworks;
+            // Find unregistered frameworks.
+            foreachvalue (const Slave* slave, master.slaves.registered) {
+              foreachkey (const FrameworkID& frameworkId, slave->tasks) {
+                if (!master.frameworks.registered.contains(frameworkId)) {
+                  frameworks.push_back(frameworkId);
+                }
+              }
+            }
+            return frameworks;
+          })
+  );
+  auto ok = OK(schema.json(*master), request.url.query.get("jsonp"));
   CALLGRIND_DUMP_STATS;
   CALLGRIND_STOP_INSTRUMENTATION;
   return ok;

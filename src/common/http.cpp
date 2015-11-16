@@ -109,6 +109,45 @@ JSON::Object model(const Resources& resources)
 }
 
 
+const JPC::detail::DynamicObject<Resources> RESOURCES_MODEL =
+  JPC::dynamic_object<Resources>([](
+      JPC::writer::Object& object, const Resources& resources) {
+    hashmap<std::string, double> scalars{{"cpus", 0}, {"mem", 0}, {"disk", 0}};
+    hashmap<std::string, Value::Ranges> ranges;
+    hashmap<std::string, Value::Set> sets;
+
+    foreach (const Resource& resource, resources) {
+      std::string name = resource.name() +
+                         (Resources::isRevocable(resource) ? "_revocable" : "");
+      switch (resource.type()) {
+        case Value::SCALAR:
+          scalars[name] += resource.scalar().value();
+          break;
+        case Value::RANGES:
+          ranges[name] += resource.ranges();
+          break;
+        case Value::SET:
+          sets[name] += resource.set();
+          break;
+        default:
+          LOG(FATAL) << "Unexpected Value type: " << resource.type();
+      }
+    }
+
+    foreachpair (const std::string& name, double value, scalars) {
+      object.field(JPC::number, name, value);
+    }
+
+    foreachpair (const std::string& name, const Value::Ranges& value, ranges) {
+      object.field(JPC::string, name, stringify(value));
+    }
+
+    foreachpair (const std::string& name, const Value::Set& value, sets) {
+      object.field(JPC::string, name, stringify(value));
+    }
+  });
+
+
 JSON::Object model(const hashmap<string, Resources>& roleResources)
 {
   JSON::Object object;
@@ -119,6 +158,17 @@ JSON::Object model(const hashmap<string, Resources>& roleResources)
 
   return object;
 }
+
+
+const JPC::detail::DynamicObject<hashmap<std::string, Resources>>
+  ROLE_RESOURCES_MODEL = JPC::dynamic_object<hashmap<string, Resources>>(
+      [](JPC::writer::Object& object,
+          const hashmap<string, Resources>& roleResources) {
+        foreachpair (
+            const string& role, const Resources& resources, roleResources) {
+          object.field(RESOURCES_MODEL, role, resources);
+        }
+      });
 
 
 JSON::Object model(const Attributes& attributes)
@@ -147,6 +197,34 @@ JSON::Object model(const Attributes& attributes)
 
   return object;
 }
+
+
+const JPC::detail::DynamicObject<Attributes> ATTRIBUTES_MODEL =
+  JPC::dynamic_object<Attributes>([](
+      JPC::writer::Object& object, const Attributes& attributes) {
+    foreach (const Attribute& attribute, attributes) {
+      switch (attribute.type()) {
+        case Value::SCALAR:
+          object.field(
+              JPC::number, attribute.name(), attribute.scalar().value());
+          break;
+        case Value::RANGES:
+          object.field(
+              JPC::string, attribute.name(), stringify(attribute.ranges()));
+          break;
+        case Value::SET:
+          object.field(
+              JPC::string, attribute.name(), stringify(attribute.set()));
+          break;
+        case Value::TEXT:
+          object.field(JPC::string, attribute.name(), attribute.text().value());
+          break;
+        default:
+          LOG(FATAL) << "Unexpected Value type: " << attribute.type();
+          break;
+      }
+    }
+  });
 
 
 JSON::Array model(const Labels& labels)
