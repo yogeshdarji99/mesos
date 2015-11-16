@@ -37,6 +37,7 @@ nobase_include_HEADERS =		\
   stout/hashset.hpp			\
   stout/interval.hpp			\
   stout/ip.hpp				\
+  stout/jpc.hpp			\
   stout/json.hpp			\
   stout/lambda.hpp			\
   stout/linkedhashmap.hpp		\
