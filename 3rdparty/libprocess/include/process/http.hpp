@@ -34,6 +34,7 @@
 #include <stout/error.hpp>
 #include <stout/hashmap.hpp>
 #include <stout/ip.hpp>
+#include <stout/jpc.hpp>
 #include <stout/json.hpp>
 #include <stout/none.hpp>
 #include <stout/nothing.hpp>
@@ -463,6 +464,32 @@ struct OK : Response
   explicit OK(const std::string& body) : Response(body, Status::OK) {}
 
   OK(const JSON::Value& value, const Option<std::string>& jsonp = None())
+    : Response(Status::OK)
+  {
+    type = BODY;
+
+    std::ostringstream out;
+
+    if (jsonp.isSome()) {
+      out << jsonp.get() << "(";
+    }
+
+    out << value;
+
+    if (jsonp.isSome()) {
+      out << ");";
+      headers["Content-Type"] = "text/javascript";
+    } else {
+      headers["Content-Type"] = "application/json";
+    }
+
+    headers["Content-Length"] = stringify(out.str().size());
+    body = out.str().data();
+  }
+
+  template <typename Schema, typename T>
+  OK(const JPC::detail::Proxy<Schema, T>& value,
+     const Option<std::string>& jsonp = None())
     : Response(Status::OK)
   {
     type = BODY;
