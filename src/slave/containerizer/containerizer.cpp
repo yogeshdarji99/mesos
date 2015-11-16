@@ -43,6 +43,8 @@
 #include "slave/containerizer/mesos/linux_launcher.hpp"
 #endif // __linux__
 
+#include "slave/containerizer/simulator/containerizer.hpp"
+
 using std::map;
 using std::string;
 using std::vector;
@@ -212,6 +214,15 @@ Try<Containerizer*> Containerizer::create(
       } else {
         containerizers.push_back(containerizer.get());
       }
+    } else if ( type == "simulator") {
+      Try<SimulatorContainerizer*> containerizer =
+                              SimulatorContainerizer::create(flags);
+        if (containerizer.isError()) {
+          return Error("Could not create SimulatorContainerizer: " +
+                  containerizer.error());
+        } else {
+          containerizers.push_back(containerizer.get());
+        }
     } else {
       return Error("Unknown or unsupported containerizer: " + type);
     }

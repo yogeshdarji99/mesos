@@ -126,6 +126,7 @@ public:
   Option<std::string> qos_controller;
   Duration qos_correction_interval_min;
   Duration oversubscribed_resources_interval;
+  Option<std::string> simulator_config;
 };
 
 } // namespace slave {

@@ -338,7 +338,6 @@ python/interface/src/mesos/v1/interface/scheduler_pb2.py: $(V1_SCHEDULER_PROTO)
 		--python_out=python/interface/src/mesos/v1/interface $^
 	$(SED) -i.bak 's/mesos\.mesos_pb2/mesos_pb2/' $@ && rm $@.bak
 
-
 pkginclude_HEADERS =							\
   $(top_srcdir)/include/mesos/attributes.hpp				\
   $(top_srcdir)/include/mesos/executor.hpp				\
@@ -618,6 +617,8 @@ libmesos_no_3rdparty_la_SOURCES +=					\
   slave/containerizer/mesos/provisioner/docker/spec.cpp			\
   slave/containerizer/mesos/provisioner/docker/store.cpp		\
   slave/containerizer/mesos/provisioner/docker/token_manager.cpp	\
+  slave/containerizer/simulator/containerizer.cpp		\
+  slave/containerizer/simulator/executor.cpp	\
   slave/resource_estimators/noop.cpp					\
   uri/fetcher.cpp							\
   uri/utils.cpp								\
@@ -726,6 +727,9 @@ libmesos_no_3rdparty_la_SOURCES +=					\
   slave/containerizer/mesos/provisioner/docker/spec.hpp			\
   slave/containerizer/mesos/provisioner/docker/store.hpp		\
   slave/containerizer/mesos/provisioner/docker/token_manager.hpp	\
+  slave/containerizer/simulator/containerizer.hpp		\
+  slave/containerizer/simulator/executor.hpp	\
+  slave/containerizer/simulator/taskspec.hpp	\
   slave/qos_controllers/noop.hpp					\
   slave/resource_estimators/noop.hpp					\
   tests/allocator.hpp							\
@@ -1722,6 +1726,7 @@ mesos_tests_SOURCES =						\
   tests/scheduler_http_api_tests.cpp				\
   tests/scheduler_tests.cpp					\
   tests/script.cpp						\
+  # tests/simulator_containerizer_test.cpp		\
   tests/slave_recovery_tests.cpp				\
   tests/slave_tests.cpp						\
   tests/sorter_tests.cpp					\

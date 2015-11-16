@@ -679,4 +679,8 @@ mesos::internal::slave::Flags::Flags()
       "about the total amount of oversubscribed resources that are allocated\n"
       "and available. The interval between updates is controlled by this flag.",
       Seconds(15));
+
+  add(&Flags::simulator_config,
+      "simulator_config",
+      "Simulator containerizer configuration file.");
 }
