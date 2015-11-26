@@ -111,7 +111,7 @@ JSON::Object model(const Resources& resources)
 
 const JPC::detail::DynamicObject<Resources> RESOURCES_MODEL =
   JPC::dynamic_object<Resources>([](
-      JPC::writer::Object& object, const Resources& resources) {
+      JPC::writer::Object& object_writer, const Resources& resources) {
     hashmap<std::string, double> scalars{{"cpus", 0}, {"mem", 0}, {"disk", 0}};
     hashmap<std::string, Value::Ranges> ranges;
     hashmap<std::string, Value::Set> sets;
@@ -135,15 +135,15 @@ const JPC::detail::DynamicObject<Resources> RESOURCES_MODEL =
     }
 
     foreachpair (const std::string& name, double value, scalars) {
-      object.field(JPC::number, name, value);
+      object_writer.field(JPC::number, name, value);
     }
 
     foreachpair (const std::string& name, const Value::Ranges& value, ranges) {
-      object.field(JPC::string, name, stringify(value));
+      object_writer.field(JPC::string, name, stringify(value));
     }
 
     foreachpair (const std::string& name, const Value::Set& value, sets) {
-      object.field(JPC::string, name, stringify(value));
+      object_writer.field(JPC::string, name, stringify(value));
     }
   });
 
@@ -162,11 +162,11 @@ JSON::Object model(const hashmap<string, Resources>& roleResources)
 
 const JPC::detail::DynamicObject<hashmap<std::string, Resources>>
   ROLE_RESOURCES_MODEL = JPC::dynamic_object<hashmap<string, Resources>>(
-      [](JPC::writer::Object& object,
-          const hashmap<string, Resources>& roleResources) {
+      [](JPC::writer::Object& object_writer,
+         const hashmap<string, Resources>& roleResources) {
         foreachpair (
             const string& role, const Resources& resources, roleResources) {
-          object.field(RESOURCES_MODEL, role, resources);
+          object_writer.field(RESOURCES_MODEL, role, resources);
         }
       });
 
@@ -200,31 +200,31 @@ JSON::Object model(const Attributes& attributes)
 
 
 const JPC::detail::DynamicObject<Attributes> ATTRIBUTES_MODEL =
-  JPC::dynamic_object<Attributes>([](
-      JPC::writer::Object& object, const Attributes& attributes) {
-    foreach (const Attribute& attribute, attributes) {
-      switch (attribute.type()) {
-        case Value::SCALAR:
-          object.field(
-              JPC::number, attribute.name(), attribute.scalar().value());
-          break;
-        case Value::RANGES:
-          object.field(
-              JPC::string, attribute.name(), stringify(attribute.ranges()));
-          break;
-        case Value::SET:
-          object.field(
-              JPC::string, attribute.name(), stringify(attribute.set()));
-          break;
-        case Value::TEXT:
-          object.field(JPC::string, attribute.name(), attribute.text().value());
-          break;
-        default:
-          LOG(FATAL) << "Unexpected Value type: " << attribute.type();
-          break;
-      }
-    }
-  });
+  JPC::dynamic_object<Attributes>(
+      [](JPC::writer::Object& object_writer, const Attributes& attributes) {
+        foreach (const Attribute& attribute, attributes) {
+          switch (attribute.type()) {
+            case Value::SCALAR:
+              object_writer.field(
+                  JPC::number, attribute.name(), attribute.scalar().value());
+              break;
+            case Value::RANGES:
+              object_writer.field(
+                  JPC::string, attribute.name(), stringify(attribute.ranges()));
+              break;
+            case Value::SET:
+              object_writer.field(
+                  JPC::string, attribute.name(), stringify(attribute.set()));
+              break;
+            case Value::TEXT:
+              object_writer.field(
+                  JPC::string, attribute.name(), attribute.text().value());
+              break;
+            default:
+              LOG(FATAL) << "Unexpected Value type: " << attribute.type();
+          }
+        }
+      });
 
 
 JSON::Array model(const Labels& labels)

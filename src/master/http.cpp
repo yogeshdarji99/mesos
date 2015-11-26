@@ -165,46 +165,31 @@ static const auto TIME_MODEL = JPC::number << &Time::secs;
 static const auto LABELS_MODEL = JPC::array(JPC::protobuf) << &Labels::labels;
 
 static const auto NETWORK_INFO_MODEL = JPC::object<NetworkInfo>(
-    JPC::field(
-        JPC::optional(JPC::string),
-        "ip_address",
-        [](const NetworkInfo& info) {
-          return info.has_ip_address() ? info.ip_address()
-                                       : Option<string>::none();
-        }),
-    JPC::field(
-        JPC::optional(JPC::array(JPC::string)),
-        "groups",
-        [](const NetworkInfo& info) {
-          return info.groups().size() > 0
-                   ? info.groups()
-                   : Option<RepeatedPtrField<string>>::none();
-        }),
-    JPC::field(
-        JPC::optional(LABELS_MODEL),
-        "labels",
-        [](const NetworkInfo& info) {
-          return info.has_labels() ? info.labels() : Option<Labels>::none();
-        }),
-    JPC::field(
-        JPC::optional(JPC::array(JPC::protobuf)),
-        "ip_addresses",
-        [](const NetworkInfo& info) {
-          return info.ip_addresses().size() <= 0
-                   ? info.ip_addresses()
-                   : Option<RepeatedPtrField<NetworkInfo::IPAddress>>::none();
-        }));
-
+    JPC::conditional(
+        &NetworkInfo::has_ip_address,
+        JPC::field(JPC::string, "ip_address", &NetworkInfo::ip_address)),
+    JPC::conditional(
+        [](const NetworkInfo& info) { return info.groups().size() > 0; },
+        JPC::field(JPC::array(JPC::string), "groups", &NetworkInfo::groups)),
+    JPC::conditional(
+        &NetworkInfo::has_labels,
+        JPC::field(LABELS_MODEL, "labels", &NetworkInfo::labels)),
+    JPC::conditional(
+        [](const NetworkInfo& info) { return info.ip_addresses().size() <= 0; },
+        JPC::field(
+            JPC::array(JPC::protobuf),
+            "ip_addresses",
+            &NetworkInfo::ip_addresses)));
 
 static const auto CONTAINER_STATUS_MODEL = JPC::object<ContainerStatus>(
-    JPC::field(
-        JPC::optional(JPC::array(NETWORK_INFO_MODEL)),
-        "network_infos",
+    JPC::conditional(
         [](const ContainerStatus& status) {
-          return status.network_infos().size() > 0
-                   ? status.network_infos()
-                   : Option<RepeatedPtrField<NetworkInfo>>::none();
-        }));
+          return status.network_infos().size() > 0;
+        },
+        JPC::field(
+            JPC::array(NETWORK_INFO_MODEL),
+            "network_infos",
+            &ContainerStatus::network_infos)));
 
 
 static const auto TASK_STATE_MODEL = JPC::string << &TaskState_Name;
@@ -213,20 +198,15 @@ static const auto TASK_STATE_MODEL = JPC::string << &TaskState_Name;
 static const auto TASK_STATUS_MODEL = JPC::object<TaskStatus>(
     JPC::field(TASK_STATE_MODEL, "state", &TaskStatus::state),
     JPC::field(JPC::number, "timestamp", &TaskStatus::timestamp),
-    JPC::field(
-        JPC::optional(LABELS_MODEL),
-        "labels",
-        [](const TaskStatus& status) {
-          return status.has_labels() ? status.labels() : Option<Labels>::none();
-        }),
-    JPC::field(
-        JPC::optional(CONTAINER_STATUS_MODEL),
-        "container_status",
-        [](const TaskStatus& status) {
-          return status.has_container_status()
-                   ? status.container_status()
-                   : Option<ContainerStatus>::none();
-        }));
+    JPC::conditional(
+        &TaskStatus::has_labels,
+        JPC::field(LABELS_MODEL, "labels", &TaskStatus::labels)),
+    JPC::conditional(
+        &TaskStatus::has_container_status,
+        JPC::field(
+            CONTAINER_STATUS_MODEL,
+            "container_status",
+            &TaskStatus::container_status)));
 
 
 static const auto TASK_MODEL = JPC::object<Task>(
@@ -243,17 +223,12 @@ static const auto TASK_MODEL = JPC::object<Task>(
     JPC::field(TASK_STATE_MODEL, "state", &Task::state),
     JPC::field(RESOURCES_MODEL, "resources", &Task::resources),
     JPC::field(JPC::array(TASK_STATUS_MODEL), "statuses", &Task::statuses),
-    JPC::field(
-        JPC::optional(LABELS_MODEL),
-        "labels",
-        [](const Task& task) {
-          return task.has_labels() ? task.labels() : Option<Labels>::none();
-        }),
-    JPC::field(JPC::optional(JPC::protobuf), "discovery", [](const Task& task) {
-      return task.has_discovery() ? task.discovery()
-                                  : Option<DiscoveryInfo>::none();
-    }));
-
+    JPC::conditional(
+        &Task::has_labels,
+        JPC::field(LABELS_MODEL, "labels", &Task::labels)),
+    JPC::conditional(
+        &Task::has_discovery,
+        JPC::field(JPC::protobuf, "discovery", &Task::discovery)));
 
 static const auto ENVIRONMENT_VARIABLE_MODEL =
   JPC::object<Environment_Variable>(
@@ -274,26 +249,17 @@ static const auto COMMAND_INFO_URI_MODEL = JPC::object<CommandInfo_URI>(
 
 
 static const auto COMMAND_INFO_MODEL = JPC::object<CommandInfo>(
-    JPC::field(
-        JPC::optional(JPC::boolean),
-        "shell",
-        [](const CommandInfo& command) {
-          return command.has_shell() ? command.shell() : Option<bool>::none();
-        }),
-    JPC::field(
-        JPC::optional(JPC::string),
-        "value",
-        [](const CommandInfo& command) {
-          return command.has_value() ? command.value() : Option<string>::none();
-        }),
+    JPC::conditional(
+        &CommandInfo::has_shell,
+        JPC::field(JPC::boolean, "shell", &CommandInfo::shell)),
+    JPC::conditional(
+        &CommandInfo::has_value,
+        JPC::field(JPC::string, "value", &CommandInfo::value)),
     JPC::field(JPC::array(JPC::string), "argv", &CommandInfo::arguments),
-    JPC::field(
-        JPC::optional(ENVIRONMENT_MODEL),
-        "environment",
-        [](const CommandInfo& command) {
-          return command.has_environment() ? command.environment()
-                                           : Option<Environment>::none();
-        }),
+    JPC::conditional(
+        &CommandInfo::has_environment,
+        JPC::field(
+            ENVIRONMENT_MODEL, "environment", &CommandInfo::environment)),
     JPC::field(JPC::array(COMMAND_INFO_URI_MODEL), "uris", &CommandInfo::uris));
 
 
@@ -373,7 +339,12 @@ static const auto FRAMEWORK_SUMMARY = JPC::object<Framework>(
     JPC::field(FRAMEWORK_ID_MODEL, "id", &Framework::id),
     JPC::field(JPC::string << &FrameworkInfo::name, "name", &Framework::info),
     // Omit pid for http frameworks.
-    JPC::field(JPC::optional(JPC::string), "pid", &Framework::pid),
+    JPC::conditional(
+        [](const Framework& framework) { return framework.pid.isSome(); },
+        JPC::field(
+            JPC::string,
+            "pid",
+            [](const Framework& framework) { return framework.pid.get(); })),
     // TODO(bmahler): Use these in the webui.
     JPC::field(
         RESOURCES_MODEL, "used_resources", &Framework::totalUsedResources),
@@ -528,14 +499,12 @@ static const auto FRAMEWORK_MODEL =
                    framework.totalOfferedResources;
           }),
       // TODO(benh): Consider making reregisteredTime an Option.
-      JPC::field(
-          JPC::optional(TIME_MODEL),
-          "reregistered_time",
+      JPC::conditional(
           [](const Framework& framework) {
-            return framework.registeredTime != framework.reregisteredTime
-                     ? framework.reregisteredTime
-                     : Option<Time>::none();
-          }),
+            return framework.registeredTime != framework.reregisteredTime;
+          },
+          JPC::field(
+              TIME_MODEL, "reregistered_time", &Framework::reregisteredTime)),
       // Model all of the tasks associated with a framework.
       JPC::field(
           JPC::array(TASK_MODEL),
@@ -595,13 +564,16 @@ static const auto FRAMEWORK_MODEL =
           }),
       */
       // Model all of the labels associated with a framework.
-      JPC::field(
-          JPC::optional(LABELS_MODEL),
-          "labels",
+      JPC::conditional(
           [](const Framework& framework) {
-            return framework.info.has_labels() ? framework.info.labels()
-                                               : Option<Labels>::none();
-          }));
+            return framework.info.has_labels();
+          },
+          JPC::field(
+              LABELS_MODEL,
+              "labels",
+              [](const Framework& framework) {
+                return framework.info.labels();
+              })));
 
 
 // Returns a JSON object summarizing some important fields in a Slave.
@@ -637,10 +609,12 @@ static const auto AGENT_SUMMARY = JPC::object<Slave>(
     JPC::field(JPC::string, "pid", &Slave::pid),
     JPC::field(JPC::string << &SlaveInfo::hostname, "hostname", &Slave::info),
     JPC::field(TIME_MODEL, "registered_time", &Slave::registeredTime),
-    JPC::field(
-        JPC::optional(TIME_MODEL),
-        "reregistered_time",
-        &Slave::reregisteredTime),
+    JPC::conditional(
+        [](const Slave& slave) { return slave.reregisteredTime.isSome(); },
+        JPC::field(
+            TIME_MODEL,
+            "reregistered_time",
+            [](const Slave& slave) { return slave.reregisteredTime.get(); })),
     JPC::field(RESOURCES_MODEL, "resources", &Slave::totalResources),
     JPC::field(
         RESOURCES_MODEL,
@@ -1514,25 +1488,30 @@ Future<Response> Master::Http::state(const Request& request) const
       });
   static const auto schema = JPC::object<Master>(
       JPC::field(JPC::string, "version", [] { return MESOS_VERSION; }),
-      JPC::field(
-          JPC::optional(JPC::string), "git_sha", [] { return build::GIT_SHA; }),
-      JPC::field(
-          JPC::optional(JPC::string),
-          "git_branch",
-          [] { return build::GIT_BRANCH; }),
-      JPC::field(
-          JPC::optional(JPC::string), "git_tag", [] { return build::GIT_TAG; }),
+      JPC::conditional(
+          [] { return build::GIT_SHA.isSome(); },
+          JPC::field(
+              JPC::string, "git_sha", [] { return build::GIT_SHA.get(); })),
+      JPC::conditional(
+          [] { return build::GIT_BRANCH.isSome(); },
+          JPC::field(
+              JPC::string,
+              "git_branch",
+              [] { return build::GIT_BRANCH.get(); })),
+      JPC::conditional(
+          [] { return build::GIT_TAG.isSome(); },
+          JPC::field(
+              JPC::string, "git_tag", [] { return build::GIT_TAG.get(); })),
       JPC::field(JPC::string, "build_date", [] { return build::DATE; }),
       JPC::field(JPC::number, "build_time", [] { return build::TIME; }),
       JPC::field(JPC::string, "build_user", [] { return build::USER; }),
       JPC::field(TIME_MODEL, "start_time", &Master::startTime),
-      JPC::field(
-          JPC::optional(JPC::number),
-          "elected_time",
-          [](const Master& master) {
-            return master.electedTime.isSome() ? master.electedTime.get().secs()
-                                               : Option<double>::none();
-          }),
+      JPC::conditional(
+          [](const Master& master) { return master.electedTime.isSome(); },
+          JPC::field(
+              TIME_MODEL,
+              "elected_time",
+              [](const Master& master) { return master.electedTime.get(); })),
       JPC::field(JPC::string << &MasterInfo::id, "id", &Master::info),
       JPC::field(JPC::string, "pid", &Master::self),
       JPC::field(
@@ -1549,25 +1528,34 @@ Future<Response> Master::Http::state(const Request& request) const
           [](const Master& master) {
             return const_cast<Master&>(master)._slaves_inactive();
           }),
-      JPC::field(
-          JPC::optional(JPC::string),
-          "cluster",
-        [](const Master& master) { return master.flags.cluster; }),
-      JPC::field(
-          JPC::optional(JPC::string),
-          "leader",
+      JPC::conditional(
+          [](const Master& master) { return master.flags.cluster.isSome(); },
+          JPC::field(
+              JPC::string,
+              "cluster",
+              [](const Master& master) { return master.flags.cluster.get(); })),
+      JPC::conditional(
+          [](const Master& master) { return master.leader.isSome(); },
+          JPC::field(
+              JPC::string,
+              "leader",
+              [](const Master& master) { return master.leader.get().pid(); })),
+      JPC::conditional(
+          [](const Master& master) { return master.flags.log_dir.isSome(); },
+          JPC::field(
+              JPC::string,
+              "log_dir",
+              [](const Master& master) { return master.flags.log_dir.get(); })),
+      JPC::conditional(
           [](const Master& master) {
-             return master.leader.isSome() ? master.leader.get().pid()
-                                           : Option<string>::none();
-          }),
-      JPC::field(
-          JPC::optional(JPC::string),
-          "log_dir",
-          [](const Master& master) { return master.flags.log_dir; }),
-      JPC::field(
-          JPC::optional(JPC::string),
-          "external_log_file",
-          [](const Master& master) { return master.flags.external_log_file; }),
+            return master.flags.external_log_file.isSome();
+          },
+          JPC::field(
+              JPC::string,
+              "external_log_file",
+              [](const Master& master) {
+                return master.flags.external_log_file.get();
+              })),
       JPC::field(flags_model, "flags", &Master::flags),
       JPC::field(
           JPC::array(AGENT_MODEL << deref{} << values{})
