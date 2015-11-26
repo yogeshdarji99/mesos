@@ -139,8 +139,8 @@ struct Boolean;
 struct Number;
 struct String;
 template <typename Schema> struct Array;
+template <typename Pred, typename Field> struct Conditional;
 template <typename Schema, typename F> struct Field;
-template <typename Schema> struct Optional;
 template <typename T, typename... Fields> struct Object;
 template <typename Schema, typename F> struct Projection;
 template <typename T> struct DynamicObject;
@@ -349,57 +349,32 @@ public:
 };
 
 
-template <typename Schema, typename T>
-struct Proxy<Optional<Schema>, T>
+template <typename Pred, typename Field>
+struct Conditional
 {
-  Schema schema_;
-  const T& value_;
+  constexpr Conditional(Pred pred, Field field)
+    : pred_(std::move(pred)), field_(std::move(field)) {}
 
 private:
-  Proxy(const Proxy&) = default;
-  Proxy(Proxy&&) = default;
+  template <typename Pred_, typename Object>
+  static auto conditional(Pred_ pred, const Object& object)
+    RETURN(invoke(pred, object))
 
-  friend struct Optional<Schema>;
+  template <typename Pred_, typename Object>
+  static auto conditional(Pred_ pred, const Object&) RETURN(invoke(pred))
 
-  /*
-  friend std::ostream& operator<<(std::ostream& strm, const Proxy& that)
+  template <typename Object>
+  void write(JPC::writer::Object& object_writer, const Object& object) const
   {
-    write(strm, that.value_);
-    if (that.value_) {
-      strm << that.schema_.json(*that.value_);
-    } else {
-      strm << "null";
+    if (conditional(pred_, object)) {
+      field_.write(object_writer, object);
     }
-    return strm;
-  }
-  */
-};
-
-
-template <typename Schema>
-struct Optional
-{
-  constexpr Optional(Schema schema) : schema_(std::move(schema)) {}
-private:
-  /*
-  template <typename T>
-  id<Proxy<Optional, Option<T>>> json(const Option<T>& value) const
-  {
-    return {schema_, value};
   }
 
-  template <typename T>
-  auto json(const T& value) const -> typename decltype(
-      static_cast<bool>(value), *value, id<Proxy<Optional, T>>{})::type
-  {
-    return {schema_, value};
-  }
-  */
-
-  Schema schema_;
+  Pred pred_;
+  Field field_;
 
   template <typename, typename, typename> friend struct Proxy;
-  template <typename, typename> friend struct Field;
 };
 
 
@@ -410,99 +385,23 @@ struct Field
     : schema_(std::move(schema)), name_(std::move(name)), f_(std::move(f)) {}
 
 private:
-  template <typename T, typename S>
-  void write_impl(
-      std::ostream& strm,
-      const T& value,
-      const S& schema,
-      bool leading_comma) const
-  {
-    if (leading_comma) {
-      strm << ',';
-    }
-    strm << String{}.json(name_) << ':' << schema.json(value);
-  }
+  template <typename G, typename Object>
+  static auto value(G g, const Object& object) RETURN(invoke(g, object))
 
-  template <typename T, typename S>
-  void write_impl(
-      std::ostream& strm,
-      const Option<T>& value,
-      const Optional<S>& schema,
-      bool leading_comma) const
-  {
-    if (value.isSome()) {
-      write_impl(strm, value.get(), schema.schema_, leading_comma);
-    }
-  }
-
-  template <typename T, typename S>
-  auto write_impl(
-      std::ostream& strm,
-      const T& value,
-      const Optional<S>& schema,
-      bool leading_comma) const ->
-    typename decltype(static_cast<bool>(value), *value, void())::type
-  {
-    if (value) {
-      write_impl(strm, *value, schema.schema_, leading_comma);
-    }
-  }
-
-  template <typename Object, typename S, typename G>
-  auto write_dispatch(
-      std::ostream& strm,
-      const Object&,
-      const Optional<S>& schema,
-      G g,
-      bool leading_comma) const -> decltype(invoke(g), void())
-  {
-    write_impl(strm, invoke(g), schema, leading_comma);
-  }
-
-  template <typename Object, typename S, typename G>
-  auto write_dispatch(
-      std::ostream& strm,
-      const Object& object,
-      const Optional<S>& schema,
-      G g,
-      bool leading_comma) const
-    -> decltype(invoke(g, object), void())
-  {
-    write_impl(strm, invoke(g, object), schema, leading_comma);
-  }
-
-  template <typename Object, typename S, typename G>
-  auto write_dispatch(
-      std::ostream& strm,
-      const Object&,
-      const S& schema,
-      G g,
-      bool leading_comma) const -> decltype(invoke(g), void())
-  {
-    write_impl(strm, invoke(g), schema, leading_comma);
-  }
-
-  template <typename Object, typename S, typename G>
-  auto write_dispatch(
-      std::ostream& strm,
-      const Object& object,
-      const S& schema,
-      G g,
-      bool leading_comma) const -> decltype(invoke(g, object), void())
-  {
-    write_impl(strm, invoke(g, object), schema, leading_comma);
-  }
+  template <typename G, typename Object>
+  static auto value(G g, const Object&) RETURN(invoke(g))
 
   template <typename Object>
-  void write(std::ostream& strm, const Object& object, bool leading_comma) const
+  void write(JPC::writer::Object& object_writer, const Object& object) const
   {
-    write_dispatch(strm, object, schema_, f_, leading_comma);
+    object_writer.field(schema_, name_, value(f_, object));
   }
 
   Schema schema_;
   const char* name_;
   F f_;
 
+  template <typename, typename> friend struct Conditional;
   template <typename, typename, typename> friend struct Proxy;
 };
 
@@ -514,20 +413,6 @@ struct Proxy<Object<T, Fields...>, T>
   const T& value_;
 
 private:
-  struct write
-  {
-    template <typename Field, typename... MoreFields>
-    void operator()(const Field& field, const MoreFields&... more_fields)
-    {
-      field.write(strm_, value_, /* leading_comma = */ false);
-      int for_each[] = {
-        (more_fields.write(strm_, value_, /* leading_comma = */ true), 0)...};
-      static_cast<void>(for_each);
-    }
-    std::ostream& strm_;
-    const T& value_;
-  };
-
   Proxy(const Proxy&) = default;
   Proxy(Proxy&&) = default;
 
@@ -535,9 +420,13 @@ private:
 
   friend std::ostream& operator<<(std::ostream& strm, const Proxy& that)
   {
-    strm << '{';
-    apply(write{strm, that.value_}, that.fields_);
-    strm << '}';
+    apply(
+        [&](const Fields&... fields) {
+          writer::Object object(strm);
+          int for_each[] = {(fields.write(object, that.value_), 0)...};
+          static_cast<void>(for_each);
+        },
+        that.fields_);
     return strm;
   }
 };
@@ -546,14 +435,9 @@ private:
 template <typename T, typename... Fields>
 struct Object
 {
-  template <typename... Schemas, typename... Fs>
-  constexpr Object(Field<Schemas, Fs>... fields)
-    : fields_{std::move(fields)...} {}
-
+  constexpr Object(Fields... fields) : fields_{std::move(fields)...} {}
   constexpr Object(std::tuple<Fields...> fields) : fields_(std::move(fields)) {}
-
   Proxy<Object, T> json(const T& value) const { return {fields_, value}; }
-
   std::tuple<Fields...> fields() const { return fields_; }
 
 private:
@@ -704,6 +588,19 @@ constexpr detail::Array<Schema> array(Schema schema)
   return {std::move(schema)};
 }
 
+template <typename Pred, typename Field>
+constexpr detail::Conditional<Pred, Field> conditional(Pred pred, Field field)
+{
+  return {std::move(pred), std::move(field)};
+}
+
+template <typename R, typename T, typename Field>
+constexpr detail::Conditional<R (T::*)() const, Field> conditional(
+    R (T::*pred)() const, Field field)
+{
+  return {std::move(pred), std::move(field)};
+}
+
 template <typename Schema, typename F>
 constexpr detail::Field<Schema, F> field(Schema schema, const char* name, F f)
 {
@@ -717,15 +614,8 @@ constexpr detail::Field<Schema, R (T::*)() const> field(
   return {std::move(schema), std::move(name), std::move(f)};
 }
 
-template <typename Schema>
-constexpr detail::Optional<Schema> optional(Schema schema)
-{
-  return {std::move(schema)};
-}
-
-template <typename T, typename... Schemas, typename... Fs>
-constexpr detail::Object<T, detail::Field<Schemas, Fs>...> object(
-    detail::Field<Schemas, Fs>... fields)
+template <typename T, typename... Fields>
+constexpr detail::Object<T, Fields...> object(Fields... fields)
 {
   return {std::move(fields)...};
 }
