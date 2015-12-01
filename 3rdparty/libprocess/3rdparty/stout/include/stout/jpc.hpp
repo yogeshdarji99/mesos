@@ -355,14 +355,6 @@ struct Conditional
   constexpr Conditional(Pred pred, Field field)
     : pred_(std::move(pred)), field_(std::move(field)) {}
 
-private:
-  template <typename Pred_, typename Object>
-  static auto conditional(Pred_ pred, const Object& object)
-    RETURN(invoke(pred, object))
-
-  template <typename Pred_, typename Object>
-  static auto conditional(Pred_ pred, const Object&) RETURN(invoke(pred))
-
   template <typename Object>
   void write(JPC::writer::Object& object_writer, const Object& object) const
   {
@@ -371,10 +363,16 @@ private:
     }
   }
 
+private:
+  template <typename Pred_, typename Object>
+  static auto conditional(Pred_ pred, const Object& object)
+    RETURN(invoke(pred, object))
+
+  template <typename Pred_, typename Object>
+  static auto conditional(Pred_ pred, const Object&) RETURN(invoke(pred))
+
   Pred pred_;
   Field field_;
-
-  template <typename, typename, typename> friend struct Proxy;
 };
 
 
@@ -384,6 +382,12 @@ struct Field
   constexpr Field(Schema schema, const char* name, F f)
     : schema_(std::move(schema)), name_(std::move(name)), f_(std::move(f)) {}
 
+  template <typename Object>
+  void write(JPC::writer::Object& object_writer, const Object& object) const
+  {
+    object_writer.field(schema_, name_, value(f_, object));
+  }
+
 private:
   template <typename G, typename Object>
   static auto value(G g, const Object& object) RETURN(invoke(g, object))
@@ -391,18 +395,11 @@ private:
   template <typename G, typename Object>
   static auto value(G g, const Object&) RETURN(invoke(g))
 
-  template <typename Object>
-  void write(JPC::writer::Object& object_writer, const Object& object) const
-  {
-    object_writer.field(schema_, name_, value(f_, object));
-  }
-
   Schema schema_;
   const char* name_;
   F f_;
 
   template <typename, typename> friend struct Conditional;
-  template <typename, typename, typename> friend struct Proxy;
 };
 
 
