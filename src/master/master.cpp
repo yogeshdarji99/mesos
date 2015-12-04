@@ -962,10 +962,13 @@ void Master::finalize()
     }
 
     // Terminate the slave observer.
-    terminate(slave->observer);
-    wait(slave->observer);
+    if (slave->observer != NULL) {
+      terminate(slave->observer);
+      wait(slave->observer);
 
-    delete slave->observer;
+      delete slave->observer;
+    }
+
     delete slave;
   }
   slaves.registered.clear();
@@ -4935,7 +4938,9 @@ void Master::offer(const FrameworkID& frameworkId,
 
     // If the slave in this offer is planned to be unavailable due to
     // maintenance in the future, then set the Unavailability.
-    CHECK(machines.contains(slave->machineId));
+    CHECK(machines.contains(slave->machineId))
+      << "MachineID " << slave->machineId << " doesn't exist";
+
     if (machines[slave->machineId].info.has_unavailability()) {
       offer->mutable_unavailability()->CopyFrom(
           machines[slave->machineId].info.unavailability());
