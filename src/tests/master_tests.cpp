@@ -14,8 +14,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <stdlib.h>
 #include <unistd.h>
 
+#include <iostream>
 #include <memory>
 #include <string>
 #include <vector>
@@ -29,6 +31,7 @@
 
 #include <mesos/scheduler/scheduler.hpp>
 
+#include <process/address.hpp>
 #include <process/clock.hpp>
 #include <process/future.hpp>
 #include <process/gmock.hpp>
@@ -38,6 +41,7 @@
 #include <process/metrics/counter.hpp>
 #include <process/metrics/metrics.hpp>
 
+#include <stout/duration.hpp>
 #include <stout/json.hpp>
 #include <stout/net.hpp>
 #include <stout/option.hpp>
@@ -52,6 +56,7 @@
 #include "master/master.hpp"
 
 #include "master/allocator/mesos/allocator.hpp"
+#include "master/allocator/mesos/hierarchical.hpp"
 
 #include "slave/constants.hpp"
 #include "slave/gc.hpp"
@@ -68,6 +73,7 @@
 using mesos::internal::master::Master;
 
 using mesos::internal::master::allocator::MesosAllocatorProcess;
+using mesos::internal::master::allocator::HierarchicalDRFAllocator;
 
 using mesos::internal::protobuf::createLabel;
 
@@ -80,10 +86,13 @@ using process::Clock;
 using process::Future;
 using process::PID;
 using process::Promise;
+using process::UPID;
 
 using process::http::OK;
 using process::http::Response;
 
+using std::cout;
+using std::endl;
 using std::shared_ptr;
 using std::string;
 using std::vector;
@@ -95,6 +104,7 @@ using testing::Eq;
 using testing::Not;
 using testing::Return;
 using testing::SaveArg;
+using testing::WithParamInterface;
 
 namespace mesos {
 namespace internal {
@@ -4087,6 +4097,174 @@ TEST_F(MasterTest, MaxCompletedTasksPerFrameworkFlag)
     Stop(slave.get());
     Stop(master.get());
   }
+}
+
+class MasterStateTest : public MasterTest {
+public:
+  MasterStateTest()
+    : nextSlaveId(0),
+      nextFrameworkId(0) {}
+
+protected:
+  SlaveInfo createSlaveInfo(const string& resources)
+  {
+    SlaveInfo slave;
+    slave.mutable_resources()->CopyFrom(Resources::parse(resources).get());
+
+    SlaveID slaveId = createSlaveId(nextSlaveId++);
+    slave.mutable_id()->CopyFrom(slaveId);
+    slave.set_hostname(slaveId.value());
+
+    return slave;
+  }
+
+  FrameworkInfo createFrameworkInfo(const string& role)
+  {
+    FrameworkInfo frameworkInfo;
+    frameworkInfo.set_user("user");
+    frameworkInfo.set_role(role);
+
+    FrameworkID frameworkId = createFrameworkId(nextFrameworkId++);
+    frameworkInfo.mutable_id()->CopyFrom(frameworkId);
+    frameworkInfo.set_name(frameworkId.value());
+
+    return frameworkInfo;
+  }
+
+  SlaveID createSlaveId(int id)
+  {
+    SlaveID slaveId;
+    slaveId.set_value("slave " + stringify(id));
+
+    return slaveId;
+  }
+
+  FrameworkID createFrameworkId(int id)
+  {
+    FrameworkID frameworkId;
+    frameworkId.set_value("framework " + stringify(id));
+
+    return frameworkId;
+  }
+
+private:
+  int nextSlaveId;
+  int nextFrameworkId;
+};
+
+
+TEST_F(MasterStateTest, State)
+{
+  size_t slaveCount = 1000u;
+  size_t frameworkCount = 5u;
+  size_t tasksPerSlave = 10;
+
+  Try<mesos::master::allocator::Allocator*> allocator =
+    HierarchicalDRFAllocator::create();
+
+  ASSERT_SOME(allocator);
+
+  master::Flags masterFlags = CreateMasterFlags();
+  Try<PID<Master>> pid = StartMaster(allocator.get(), masterFlags);
+  ASSERT_SOME(pid);
+
+  Option<Master*> master = cluster.find(pid.get());
+  ASSERT_SOME(master);
+
+  // Add frameworks.
+  std::vector<master::Framework*> frameworks(frameworkCount);
+
+  foreach (master::Framework*& framework, frameworks) {
+    const FrameworkInfo frameworkInfo = createFrameworkInfo("*");
+
+    framework = new master::Framework(
+        master.get(),
+        masterFlags,
+        frameworkInfo,
+        UPID(frameworkInfo.id().value(), process::network::Address()));
+
+    master.get()->frameworks.registered[framework->id()] = framework;
+  }
+
+  std::vector<master::Slave*> slaves(slaveCount);
+
+  // Add slaves and tasks.
+  foreach (master::Slave*& slave, slaves) {
+    const SlaveInfo slaveInfo = createSlaveInfo(
+        "cpus:20;mem:1024;disk:4096;ports:[31000-32000]");
+
+    MachineID machineId;
+    machineId.set_hostname(slaveInfo.hostname());
+    machineId.set_ip(slaveInfo.hostname());
+
+    slave = new master::Slave(
+        slaveInfo,
+        UPID(slaveInfo.id().value(), process::network::Address()),
+        machineId,
+        MESOS_VERSION,
+        Clock::now(),
+        Resources());
+
+    master.get()->slaves.registered.put(slave);
+
+    master.get()->machines[slave->machineId].slaves.insert(slave->id);
+
+    // Add tasks to the slave.
+    for (unsigned j = 0; j < tasksPerSlave; j++) {
+      const TaskInfo taskInfo = createTask(
+          slave->id, Resources::parse("cpus:1;mem:32;disk:32").get(), "");
+
+      // Choose a random framework.
+      FrameworkID frameworkId = createFrameworkId(random() % frameworkCount);
+      master::Framework* framework =
+        master.get()->frameworks.registered[frameworkId];
+
+      master.get()->addTask(taskInfo, framework, slave);
+    }
+  }
+
+  // Add frameworks to the allocator
+  foreach (const master::Framework* framework, frameworks) {
+    allocator.get()->addFramework(
+        framework->id(),
+        framework->info,
+        framework->usedResources);
+  }
+
+  // Add slaves to the allocator.
+  foreach (const master::Slave* slave, slaves) {
+    allocator.get()->addSlave(
+        slave->id,
+        slave->info,
+        None(),
+        slave->totalResources,
+        slave->usedResources);
+  }
+
+  cout << "Added " << slaveCount << " slaves"
+       << " and " << frameworkCount << " frameworks" << endl;
+
+  Stopwatch watch;
+  watch.start();
+
+  // Request state.json.
+  Future<process::http::Response> response =
+    process::http::get(pid.get(), "state.json");
+
+  AWAIT_READY_FOR(response, Minutes(10));
+
+  cout << "Received state.json response in " << watch.elapsed() << endl;
+
+  EXPECT_SOME_EQ(
+      "application/json",
+      response.get().headers.get("Content-Type"));
+
+  Try<JSON::Object> parse = JSON::parse<JSON::Object>(response.get().body);
+  ASSERT_SOME(parse);
+
+  Shutdown();
+
+  delete allocator.get();
 }
 
 } // namespace tests {

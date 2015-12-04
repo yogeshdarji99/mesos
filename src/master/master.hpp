@@ -174,6 +174,7 @@ struct Slave
     }
 
     LOG(INFO) << "Adding task " << taskId
+              << " of framework " << frameworkId
               << " with resources " << task->resources()
               << " on slave " << id << " (" << info.hostname() << ")";
   }
@@ -544,6 +545,171 @@ public:
     return info_;
   }
 
+  // Made these public for benchmark testing.
+
+  // Add the task and its executor (if not already running) to the
+  // framework and slave. Returns the resources consumed as a result,
+  // which includes resources for the task and its executor
+  // (if not already running).
+  Resources addTask(const TaskInfo& task, Framework* framework, Slave* slave);
+
+  const Flags flags;
+
+  struct Slaves
+  {
+    Slaves() : removed(MAX_REMOVED_SLAVES) {}
+
+    // Imposes a time limit for slaves that we recover from the
+    // registry to re-register with the master.
+    Option<process::Timer> recoveredTimer;
+
+    // Slaves that have been recovered from the registrar but have yet
+    // to re-register. We keep a "reregistrationTimer" above to ensure
+    // we remove these slaves if they do not re-register.
+    hashset<SlaveID> recovered;
+
+    // Slaves that are in the process of registering.
+    hashset<process::UPID> registering;
+
+    // Only those slaves that are re-registering for the first time
+    // with this master. We must not answer questions related to
+    // these slaves until the registrar determines their fate.
+    hashset<SlaveID> reregistering;
+
+    // Registered slaves are indexed by SlaveID and UPID. Note that
+    // iteration is supported but is exposed as iteration over a
+    // hashmap<SlaveID, Slave*> since it is tedious to convert
+    // the map's key/value iterator into a value iterator.
+    //
+    // TODO(bmahler): Consider pulling in boost's multi_index,
+    // or creating a simpler indexing abstraction in stout.
+    struct
+    {
+      bool contains(const SlaveID& slaveId) const
+      {
+        return ids.contains(slaveId);
+      }
+
+      bool contains(const process::UPID& pid) const
+      {
+        return pids.contains(pid);
+      }
+
+      Slave* get(const SlaveID& slaveId) const
+      {
+        return ids.get(slaveId).getOrElse(NULL);
+      }
+
+      Slave* get(const process::UPID& pid) const
+      {
+        return pids.get(pid).getOrElse(NULL);
+      }
+
+      void put(Slave* slave)
+      {
+        CHECK_NOTNULL(slave);
+        ids[slave->id] = slave;
+        pids[slave->pid] = slave;
+      }
+
+      void remove(Slave* slave)
+      {
+        CHECK_NOTNULL(slave);
+        ids.erase(slave->id);
+        pids.erase(slave->pid);
+      }
+
+      void clear()
+      {
+        ids.clear();
+        pids.clear();
+      }
+
+      size_t size() const { return ids.size(); }
+
+      typedef hashmap<SlaveID, Slave*>::iterator iterator;
+      typedef hashmap<SlaveID, Slave*>::const_iterator const_iterator;
+
+      iterator begin() { return ids.begin(); }
+      iterator end()   { return ids.end();   }
+
+      const_iterator begin() const { return ids.begin(); }
+      const_iterator end()   const { return ids.end();   }
+
+    private:
+      hashmap<SlaveID, Slave*> ids;
+      hashmap<process::UPID, Slave*> pids;
+    } registered;
+
+    // Slaves that are in the process of being removed from the
+    // registrar. Think of these as being partially removed: we must
+    // not answer questions related to these until they are removed
+    // from the registry.
+    hashset<SlaveID> removing;
+
+    // We track removed slaves to preserve the consistency
+    // semantics of the pre-registrar code when a non-strict registrar
+    // is being used. That is, if we remove a slave, we must make
+    // an effort to prevent it from (re-)registering, sending updates,
+    // etc. We keep a cache here to prevent this from growing in an
+    // unbounded manner.
+    // TODO(bmahler): Ideally we could use a cache with set semantics.
+    Cache<SlaveID, Nothing> removed;
+
+    // This rate limiter is used to limit the removal of slaves failing
+    // health checks.
+    // NOTE: Using a 'shared_ptr' here is OK because 'RateLimiter' is
+    // a wrapper around libprocess process which is thread safe.
+    Option<std::shared_ptr<process::RateLimiter>> limiter;
+
+    bool transitioning(const Option<SlaveID>& slaveId)
+    {
+      if (slaveId.isSome()) {
+        return recovered.contains(slaveId.get()) ||
+               reregistering.contains(slaveId.get()) ||
+               removing.contains(slaveId.get());
+      } else {
+        return !recovered.empty() ||
+               !reregistering.empty() ||
+               !removing.empty();
+      }
+    }
+  } slaves;
+
+  struct Frameworks
+  {
+    Frameworks(const Flags& masterFlags)
+      : completed(masterFlags.max_completed_frameworks) {}
+
+    hashmap<FrameworkID, Framework*> registered;
+    boost::circular_buffer<std::shared_ptr<Framework>> completed;
+
+    // Principals of frameworks keyed by PID.
+    // NOTE: Multiple PIDs can map to the same principal. The
+    // principal is None when the framework doesn't specify it.
+    // The differences between this map and 'authenticated' are:
+    // 1) This map only includes *registered* frameworks. The mapping
+    //    is added when a framework (re-)registers.
+    // 2) This map includes unauthenticated frameworks (when Master
+    //    allows them) if they have principals specified in
+    //    FrameworkInfo.
+    hashmap<process::UPID, Option<std::string>> principals;
+
+    // BoundedRateLimiters keyed by the framework principal.
+    // Like Metrics::Frameworks, all frameworks of the same principal
+    // are throttled together at a common rate limit.
+    hashmap<std::string, Option<process::Owned<BoundedRateLimiter>>> limiters;
+
+    // The default limiter is for frameworks not specified in
+    // 'flags.rate_limits'.
+    Option<process::Owned<BoundedRateLimiter>> defaultLimiter;
+  } frameworks;
+
+  // Holds some info which affects how a machine behaves, as well as state that
+  // represent the master's view of this machine. See the `MachineInfo` protobuf
+  // and `Machine` struct for more information.
+  hashmap<MachineID, Machine> machines;
+
 protected:
   virtual void initialize();
   virtual void finalize();
@@ -766,12 +932,6 @@ protected:
   process::Future<bool> authorizeDestroyVolume(
       const Offer::Operation::Destroy& destroy,
       const Option<std::string>& principal);
-
-  // Add the task and its executor (if not already running) to the
-  // framework and slave. Returns the resources consumed as a result,
-  // which includes resources for the task and its executor
-  // (if not already running).
-  Resources addTask(const TaskInfo& task, Framework* framework, Slave* slave);
 
   // Transitions the task, and recovers resources if the task becomes
   // terminal.
@@ -1191,8 +1351,6 @@ private:
   friend Slave* validation::offer::getSlave(
       Master* master, const SlaveID& slaveId);
 
-  const Flags flags;
-
   Http http;
 
   Option<MasterInfo> leader; // Current leading master.
@@ -1210,11 +1368,6 @@ private:
 
   MasterInfo info_;
 
-  // Holds some info which affects how a machine behaves, as well as state that
-  // represent the master's view of this machine. See the `MachineInfo` protobuf
-  // and `Machine` struct for more information.
-  hashmap<MachineID, Machine> machines;
-
   struct Maintenance
   {
     // Holds the maintenance schedule, as given by the operator.
@@ -1224,156 +1377,6 @@ private:
   // Indicates when recovery is complete. Recovery begins once the
   // master is elected as a leader.
   Option<process::Future<Nothing>> recovered;
-
-  struct Slaves
-  {
-    Slaves() : removed(MAX_REMOVED_SLAVES) {}
-
-    // Imposes a time limit for slaves that we recover from the
-    // registry to re-register with the master.
-    Option<process::Timer> recoveredTimer;
-
-    // Slaves that have been recovered from the registrar but have yet
-    // to re-register. We keep a "reregistrationTimer" above to ensure
-    // we remove these slaves if they do not re-register.
-    hashset<SlaveID> recovered;
-
-    // Slaves that are in the process of registering.
-    hashset<process::UPID> registering;
-
-    // Only those slaves that are re-registering for the first time
-    // with this master. We must not answer questions related to
-    // these slaves until the registrar determines their fate.
-    hashset<SlaveID> reregistering;
-
-    // Registered slaves are indexed by SlaveID and UPID. Note that
-    // iteration is supported but is exposed as iteration over a
-    // hashmap<SlaveID, Slave*> since it is tedious to convert
-    // the map's key/value iterator into a value iterator.
-    //
-    // TODO(bmahler): Consider pulling in boost's multi_index,
-    // or creating a simpler indexing abstraction in stout.
-    struct
-    {
-      bool contains(const SlaveID& slaveId) const
-      {
-        return ids.contains(slaveId);
-      }
-
-      bool contains(const process::UPID& pid) const
-      {
-        return pids.contains(pid);
-      }
-
-      Slave* get(const SlaveID& slaveId) const
-      {
-        return ids.get(slaveId).getOrElse(NULL);
-      }
-
-      Slave* get(const process::UPID& pid) const
-      {
-        return pids.get(pid).getOrElse(NULL);
-      }
-
-      void put(Slave* slave)
-      {
-        CHECK_NOTNULL(slave);
-        ids[slave->id] = slave;
-        pids[slave->pid] = slave;
-      }
-
-      void remove(Slave* slave)
-      {
-        CHECK_NOTNULL(slave);
-        ids.erase(slave->id);
-        pids.erase(slave->pid);
-      }
-
-      void clear()
-      {
-        ids.clear();
-        pids.clear();
-      }
-
-      size_t size() const { return ids.size(); }
-
-      typedef hashmap<SlaveID, Slave*>::iterator iterator;
-      typedef hashmap<SlaveID, Slave*>::const_iterator const_iterator;
-
-      iterator begin() { return ids.begin(); }
-      iterator end()   { return ids.end();   }
-
-      const_iterator begin() const { return ids.begin(); }
-      const_iterator end()   const { return ids.end();   }
-
-    private:
-      hashmap<SlaveID, Slave*> ids;
-      hashmap<process::UPID, Slave*> pids;
-    } registered;
-
-    // Slaves that are in the process of being removed from the
-    // registrar. Think of these as being partially removed: we must
-    // not answer questions related to these until they are removed
-    // from the registry.
-    hashset<SlaveID> removing;
-
-    // We track removed slaves to preserve the consistency
-    // semantics of the pre-registrar code when a non-strict registrar
-    // is being used. That is, if we remove a slave, we must make
-    // an effort to prevent it from (re-)registering, sending updates,
-    // etc. We keep a cache here to prevent this from growing in an
-    // unbounded manner.
-    // TODO(bmahler): Ideally we could use a cache with set semantics.
-    Cache<SlaveID, Nothing> removed;
-
-    // This rate limiter is used to limit the removal of slaves failing
-    // health checks.
-    // NOTE: Using a 'shared_ptr' here is OK because 'RateLimiter' is
-    // a wrapper around libprocess process which is thread safe.
-    Option<std::shared_ptr<process::RateLimiter>> limiter;
-
-    bool transitioning(const Option<SlaveID>& slaveId)
-    {
-      if (slaveId.isSome()) {
-        return recovered.contains(slaveId.get()) ||
-               reregistering.contains(slaveId.get()) ||
-               removing.contains(slaveId.get());
-      } else {
-        return !recovered.empty() ||
-               !reregistering.empty() ||
-               !removing.empty();
-      }
-    }
-  } slaves;
-
-  struct Frameworks
-  {
-    Frameworks(const Flags& masterFlags)
-      : completed(masterFlags.max_completed_frameworks) {}
-
-    hashmap<FrameworkID, Framework*> registered;
-    boost::circular_buffer<std::shared_ptr<Framework>> completed;
-
-    // Principals of frameworks keyed by PID.
-    // NOTE: Multiple PIDs can map to the same principal. The
-    // principal is None when the framework doesn't specify it.
-    // The differences between this map and 'authenticated' are:
-    // 1) This map only includes *registered* frameworks. The mapping
-    //    is added when a framework (re-)registers.
-    // 2) This map includes unauthenticated frameworks (when Master
-    //    allows them) if they have principals specified in
-    //    FrameworkInfo.
-    hashmap<process::UPID, Option<std::string>> principals;
-
-    // BoundedRateLimiters keyed by the framework principal.
-    // Like Metrics::Frameworks, all frameworks of the same principal
-    // are throttled together at a common rate limit.
-    hashmap<std::string, Option<process::Owned<BoundedRateLimiter>>> limiters;
-
-    // The default limiter is for frameworks not specified in
-    // 'flags.rate_limits'.
-    Option<process::Owned<BoundedRateLimiter>> defaultLimiter;
-  } frameworks;
 
   hashmap<OfferID, Offer*> offers;
   hashmap<OfferID, process::Timer> offerTimers;
