@@ -52,6 +52,8 @@
 #include <stout/try.hpp>
 #include <stout/utils.hpp>
 
+#include <valgrind/callgrind.h>
+
 #include "common/build.hpp"
 #include "common/http.hpp"
 #include "common/protobuf_utils.hpp"
@@ -1119,6 +1121,8 @@ string Master::Http::STATE_HELP()
 
 Future<Response> Master::Http::state(const Request& request) const
 {
+  CALLGRIND_START_INSTRUMENTATION;
+  CALLGRIND_ZERO_STATS;
   JSON::Object object;
   object.values["version"] = MESOS_VERSION;
 
@@ -1251,7 +1255,10 @@ Future<Response> Master::Http::state(const Request& request) const
     object.values["unregistered_frameworks"] = std::move(array);
   }
 
-  return OK(object, request.url.query.get("jsonp"));
+  auto ok = OK(object, request.url.query.get("jsonp"));
+  CALLGRIND_DUMP_STATS;
+  CALLGRIND_STOP_INSTRUMENTATION;
+  return ok;
 }
 
 
