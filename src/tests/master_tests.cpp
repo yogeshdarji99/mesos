@@ -4131,8 +4131,10 @@ TEST_P(MasterState_BENCHMARK_Test, State)
       "application/json",
       response.get().headers.get("Content-Type"));
 
+  /*
   Try<JSON::Object> parse = JSON::parse<JSON::Object>(response.get().body);
   ASSERT_SOME(parse);
+  */
 
   Shutdown();
 
