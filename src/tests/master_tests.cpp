@@ -4045,24 +4045,23 @@ TEST_P(MasterState_BENCHMARK_Test, State)
   ASSERT_SOME(master);
 
   // Add frameworks.
-  for (unsigned i = 0; i < frameworkCount; ++i) {
+  std::vector<master::Framework*> frameworks(frameworkCount);
+
+  foreach (master::Framework*& framework, frameworks) {
     const FrameworkInfo frameworkInfo = createFrameworkInfo("*");
 
-    master::Framework* framework = new master::Framework(
+    framework = new master::Framework(
         master.get(),
         frameworkInfo,
         UPID(frameworkInfo.id().value(), process::network::Address()));
 
     master.get()->frameworks.registered[framework->id()] = framework;
-
-    allocator.get()->addFramework(
-        framework->id(),
-        framework->info,
-        framework->usedResources);
   }
 
+  std::vector<master::Slave*> slaves(slaveCount);
+
   // Add slaves and tasks.
-  for (unsigned i = 0; i < slaveCount; i++) {
+  foreach (master::Slave*& slave, slaves) {
     const SlaveInfo slaveInfo = createSlaveInfo(
         "cpus:20;mem:1024;disk:4096;ports:[31000-32000]");
 
@@ -4070,7 +4069,7 @@ TEST_P(MasterState_BENCHMARK_Test, State)
     machineId.set_hostname(slaveInfo.hostname());
     machineId.set_ip(slaveInfo.hostname());
 
-    master::Slave* slave = new master::Slave(
+    slave = new master::Slave(
         slaveInfo,
         UPID(slaveInfo.id().value(), process::network::Address()),
         machineId,
@@ -4081,13 +4080,6 @@ TEST_P(MasterState_BENCHMARK_Test, State)
     master.get()->slaves.registered.put(slave);
 
     master.get()->machines[slave->machineId].slaves.insert(slave->id);
-
-    allocator.get()->addSlave(
-        slave->id,
-        slave->info,
-        None(),
-        slave->totalResources,
-        slave->usedResources);
 
     // Add tasks to the slave.
     for (unsigned j = 0; j < tasksPerSlave; j++) {
@@ -4101,6 +4093,24 @@ TEST_P(MasterState_BENCHMARK_Test, State)
 
       master.get()->addTask(taskInfo, framework, slave);
     }
+  }
+
+  // Add frameworks to the allocator
+  foreach (const master::Framework* framework, frameworks) {
+    allocator.get()->addFramework(
+        framework->id(),
+        framework->info,
+        framework->usedResources);
+  }
+
+  // Add slaves to the allocator.
+  foreach (const master::Slave* slave, slaves) {
+    allocator.get()->addSlave(
+        slave->id,
+        slave->info,
+        None(),
+        slave->totalResources,
+        slave->usedResources);
   }
 
   cout << "Added " << slaveCount << " slaves"
