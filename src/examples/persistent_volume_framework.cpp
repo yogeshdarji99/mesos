@@ -195,6 +195,9 @@ public:
         switch (shard.state) {
           case Shard::INIT:
             if (offered.contains(shard.resources)) {
+              LOG(INFO) << "Found sufficient resources to place shard "
+                        << shard.name << " on slave " << offer.slave_id();
+
               Resources reserved = SHARD_RESERVED_RESOURCES(
                   frameworkInfo.role(), frameworkInfo.principal());
 
@@ -229,14 +232,27 @@ public:
               shard.resources = resources.get();
               shard.launched++;
 
+              LOG(INFO) << "Shard " << shard.name << " is staging task "
+                        << shard.taskId;
+
               operations.push_back(RESERVE(reserved));
+
+              LOG(INFO) << "Queued a RESERVE operation for resources: "
+                        << reserved;
+
               operations.push_back(CREATE(volume));
+
+              LOG(INFO) << "Queued a CREATE operation for volume: " << volume;
+
               operations.push_back(LAUNCH({task}));
 
+              LOG(INFO) << "Queued a LAUNCH operation for task id "
+                        << shard.taskId << " with volume " << shard.volume.id
+                        << " on slave " << shard.volume.slave
+                        << " running command: " << task.command().value();
+
               resources = offered.apply(vector<Offer::Operation>{
-                  RESERVE(reserved),
-                  CREATE(volume),
-                  LAUNCH({task})});
+                RESERVE(reserved), CREATE(volume), LAUNCH({task})});
 
               CHECK_SOME(resources);
               offered = resources.get();
@@ -258,7 +274,15 @@ public:
               shard.taskId = task.task_id();
               shard.launched++;
 
+              LOG(INFO) << "Shard " << shard.name << " is staging task "
+                        << shard.taskId;
+
               operations.push_back(LAUNCH({task}));
+
+              LOG(INFO) << "Queued a LAUNCH operation for task id "
+                        << shard.taskId << " with volume " << shard.volume.id
+                        << " on slave " << shard.volume.slave
+                        << " running command: " << task.command().value();
             }
             break;
           case Shard::STAGING:
@@ -296,12 +320,17 @@ public:
         switch (status.state()) {
           case TASK_RUNNING:
             shard.state = Shard::RUNNING;
+            LOG(INFO) << "Shard " << shard.name << " is running task "
+                      << shard.taskId;
             break;
           case TASK_FINISHED:
             if (shard.launched >= shard.tasks) {
               shard.state = Shard::DONE;
+              LOG(INFO) << "Shard " << shard.name << " is completed!";
             } else {
               shard.state = Shard::WAITING;
+              LOG(INFO) << "Shard " << shard.name
+                        << " is waiting for the task to be relaunched.";
             }
             break;
           case TASK_STAGING:
