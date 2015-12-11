@@ -56,16 +56,33 @@ using std::string;
 using std::vector;
 
 
+Resource::ReservationInfo createReservationInfo(const std::string& principal)
+{
+  Resource::ReservationInfo info;
+  info.set_principal(principal);
+  return info;
+}
+
+
 // TODO(jieyu): Currently, persistent volume is only allowed for
 // reserved resources.
-static Resources SHARD_INITIAL_RESOURCES(const string& role)
+static Resources SHARD_INITIAL_RESOURCES()
 {
-  return Resources::parse("cpus:0.1;mem:32;disk:16", role).get();
+  return Resources::parse("cpus:1;mem:32;disk:16").get();
+}
+
+
+static Resources SHARD_RESERVED_RESOURCES(
+    const string& role, const string& principal)
+{
+  return SHARD_INITIAL_RESOURCES().flatten(
+      role, createReservationInfo(principal));
 }
 
 
 static Resource SHARD_PERSISTENT_VOLUME(
     const string& role,
+    const string& principal,
     const string& persistenceId,
     const string& containerPath)
 {
@@ -77,10 +94,22 @@ static Resource SHARD_PERSISTENT_VOLUME(
   info.mutable_persistence()->set_id(persistenceId);
   info.mutable_volume()->CopyFrom(volume);
 
+
   Resource resource = Resources::parse("disk", "8", role).get();
   resource.mutable_disk()->CopyFrom(info);
+  resource.mutable_reservation()->CopyFrom(createReservationInfo(principal));
 
   return resource;
+}
+
+
+// Helpers for creating reserve operations.
+inline Offer::Operation RESERVE(const Resources& resources)
+{
+  Offer::Operation operation;
+  operation.set_type(Offer::Operation::RESERVE);
+  operation.mutable_reserve()->mutable_resources()->CopyFrom(resources);
+  return operation;
 }
 
 
@@ -119,11 +148,8 @@ public:
       size_t tasksPerShard)
     : frameworkInfo(_frameworkInfo)
   {
-    for (size_t i = 0; i < numShards; i++) {
-      shards.push_back(Shard(
-          "shard-" + stringify(i),
-          frameworkInfo.role(),
-          tasksPerShard));
+    for (size_t i = 0; i < numShards; ++i) {
+      shards.push_back(Shard("shard-" + stringify(i), tasksPerShard));
     }
   }
 
@@ -169,12 +195,23 @@ public:
         switch (shard.state) {
           case Shard::INIT:
             if (offered.contains(shard.resources)) {
+              Resources reserved = SHARD_RESERVED_RESOURCES(
+                  frameworkInfo.role(), frameworkInfo.principal());
+
+              Try<Resources> resources =
+                shard.resources.apply(RESERVE(reserved));
+
+              CHECK_SOME(resources);
+
+              shard.resources = resources.get();
+
               Resource volume = SHARD_PERSISTENT_VOLUME(
                   frameworkInfo.role(),
+                  frameworkInfo.principal(),
                   UUID::random().toString(),
                   "volume");
 
-              Try<Resources> resources = shard.resources.apply(CREATE(volume));
+              resources = shard.resources.apply(CREATE(volume));
               CHECK_SOME(resources);
 
               TaskInfo task;
@@ -192,10 +229,12 @@ public:
               shard.resources = resources.get();
               shard.launched++;
 
+              operations.push_back(RESERVE(reserved));
               operations.push_back(CREATE(volume));
               operations.push_back(LAUNCH({task}));
 
               resources = offered.apply(vector<Offer::Operation>{
+                  RESERVE(reserved),
                   CREATE(volume),
                   LAUNCH({task})});
 
@@ -356,10 +395,10 @@ private:
       string slave;
     };
 
-    Shard(const string& _name, const string& role, size_t _tasks)
+    Shard(const string& _name, size_t _tasks)
       : name(_name),
         state(INIT),
-        resources(SHARD_INITIAL_RESOURCES(role)),
+        resources(SHARD_INITIAL_RESOURCES()),
         launched(0),
         tasks(_tasks) {}
 
@@ -460,9 +499,6 @@ int main(int argc, char** argv)
     acl->mutable_roles()->add_values(flags.role);
 
     os::setenv("MESOS_ACLS", stringify(JSON::Protobuf(acls)));
-
-    // Configure slave.
-    os::setenv("MESOS_DEFAULT_ROLE", flags.role);
 
     const string launcherDir = Path(os::realpath(argv[0]).get()).dirname();
     os::setenv("MESOS_LAUNCHER_DIR", launcherDir);
