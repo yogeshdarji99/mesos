@@ -106,7 +106,7 @@ int main(int argc, char** argv)
 Objects like `Future` allow attaching callbacks that get executed
 _synchronously_ on certain events, such as the completion of a future
 (e.g., `Future::then` and `Future::onReady`) or the failure of a
-future (e.g., `Future::onFailed`). It's usually desireable, however, to
+future (e.g., `Future::onFailed`). It's usually desirable, however, to
 execute these callbacks _asynchronously_, and `defer` provides a mechanism
 to do so.
 
@@ -166,26 +166,26 @@ contender->contend()
 ~~~
 
 Why use `defer` in this context rather than just executing
-`Master::detected` synchronously? To answer this, we need to remember
+`Master::contended` synchronously? To answer this, we need to remember
 that when the promise associated with the future returned from
-`contender->contend()` is completed that will synchronously invoke all
-registered callbacks (i.e., the `Future::onAny` one in the example
-above), _which may be in a different process_! Without using `defer`
+`contender->contend()` is completed, that will synchronously invoke all
+registered callbacks (i.e., the parameter of `Future::onAny` in the example
+above), _which may be in a different process_! Without using `defer`,
 the process responsible for executing `contender->contend()` will
-potentially cause `&Master::contended` to get executed simultaneously
-(i.e., on a different thread) than the `Master` process! This creates
+potentially cause `&Master::contended` to get executed simultaneously,
+i.e., on a different thread than the `Master` process! This creates
 the potential for a data race in which two threads access members of
 `Master` concurrently. Instead, using `defer` (with `self()`) will
 dispatch the method _back_ to the `Master` process to be executed at a
 later point in time within the single-threaded execution context of
-the `Master`. Using `defer` here precisely allows us to capture these
-semantics.
+the `Master`. Using `defer` here allows us to capture these
+semantics precisely.
 
-A natural question that folks often ask is whether or not we ever
-_don't_ want to use `defer(self(), ...)`, or even just 'defer`. In
+A natural question that folks often ask is whether we ever
+_don't_ want to use `defer(self(), ...)`, or even just `defer`. In
 some circumstances, you actually don't need to defer back to your own
-process, but you often want to defer. A good example of that is
-handling HTTP requests. Consider this example:
+process, but you often want to defer. A good example of that is the
+handling of HTTP requests. Consider this example:
 
 ~~~{.cpp}
 using namespace process;
@@ -213,8 +213,8 @@ _does not_ need to be executed within the execution context of
 `HttpProcess` because it doesn't require any state from `HttpProcess`!
 In this case, rather than forcing the execution of the callback within
 the execution context of `HttpProcess`, which will block other
-callbacks _that must_ be executed by `HttpProcess`, we can simply just
-run this lambda using an execution context that libprocess can pick
+callbacks that _must_ be executed by `HttpProcess`, we can simply
+run this lambda using an execution context that libprocess picks
 for us (from a pool of threads). We do so by removing `self()` as the
 first argument to `defer`:
 
@@ -242,7 +242,7 @@ _Note that even in this example_ we still want to use `defer`! Why?
 Because otherwise we are blocking the execution context (i.e.,
 process, thread, etc) that is _completing_ the future because it is
 synchronously executing the callbacks! Instead, we want to let the
-callback get executed asynchronously by using `defer.`
+callback get executed asynchronously by using `defer`.
 
 
 ### `ID`
