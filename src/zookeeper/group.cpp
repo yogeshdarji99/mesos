@@ -143,11 +143,27 @@ void GroupProcess::initialize()
 {
   // Doing initialization here allows to avoid the race between
   // instantiating the ZooKeeper instance and being spawned ourself.
+  startConnection();
+}
+
+
+void GroupProcess::startConnection()
+{
   watcher = new ProcessWatcher<GroupProcess>(self());
   zk = new ZooKeeper(servers, sessionTimeout, watcher);
   state = CONNECTING;
-}
 
+  // If the connection is not established promptly, close the Zk
+  // handle and create a new one. This is important because the Zk 3.4
+  // client libraries don't try to re-resolve the list of hostnames,
+  // so we create a new Zk handle to ensure we observe changes to DNS
+  // configuration. See MESOS-4546 and `ZooKeeperProcess::initialize`
+  // for more information.
+  connectTimer = delay(zk->getSessionTimeout(),
+                       self(),
+                       &Self::timedout,
+                       zk->getSessionId());
+}
 
 Future<Group::Membership> GroupProcess::join(
     const string& data,
@@ -348,11 +364,10 @@ void GroupProcess::connected(int64_t sessionId, bool reconnect)
       << state;
   }
 
-  // Cancel and cleanup the reconnect timer (if necessary).
-  if (timer.isSome()) {
-    Clock::cancel(timer.get());
-    timer = None();
-  }
+  // Cancel and cleanup the connect timer.
+  CHECK_SOME(connectTimer);
+  Clock::cancel(connectTimer.get());
+  connectTimer = None();
 
   // Sync group operations (and set up the group on ZK).
   Try<bool> synced = sync();
@@ -448,13 +463,13 @@ void GroupProcess::reconnecting(int64_t sessionId)
   // we create a local timer and "expire" our session prematurely if
   // we haven't reconnected within the session expiration time out.
   // The timer can be reset if the connection is restored.
-  CHECK_NONE(timer);
+  CHECK_NONE(connectTimer);
 
-  // Use the negotiated session timeout for the reconnect timer.
-  timer = delay(zk->getSessionTimeout(),
-                self(),
-                &Self::timedout,
-                zk->getSessionId());
+  // Use the negotiated session timeout for the connect timer.
+  connectTimer = delay(zk->getSessionTimeout(),
+                       self(),
+                       &Self::timedout,
+                       zk->getSessionId());
 }
 
 
@@ -466,12 +481,12 @@ void GroupProcess::timedout(int64_t sessionId)
 
   CHECK_NOTNULL(zk);
 
-  if (timer.isSome() &&
-      timer.get().timeout().expired() &&
+  if (connectTimer.isSome() &&
+      connectTimer.get().timeout().expired() &&
       zk->getSessionId() == sessionId) {
-    // The timer can be reset or replaced and 'zk' can be replaced
-    // since this method was dispatched.
-    LOG(WARNING) << "Timed out waiting to reconnect to ZooKeeper."
+    // The connect timer can be reset or replaced and `zk`
+    // can be replaced since this method was dispatched.
+    LOG(WARNING) << "Timed out waiting to connect to ZooKeeper."
                  << " Forcing ZooKeeper session "
                  << "(sessionId=" << std::hex << sessionId << ") expiration";
 
@@ -492,10 +507,10 @@ void GroupProcess::expired(int64_t sessionId)
   // Cancel the retries. Group will sync() after it reconnects to ZK.
   retrying = false;
 
-  // Cancel and cleanup the reconnect timer (if necessary).
-  if (timer.isSome()) {
-    Clock::cancel(timer.get());
-    timer = None();
+  // Cancel and cleanup the connect timer (if necessary).
+  if (connectTimer.isSome()) {
+    Clock::cancel(connectTimer.get());
+    connectTimer = None();
   }
 
   // From the group's local perspective all the memberships are
@@ -531,10 +546,7 @@ void GroupProcess::expired(int64_t sessionId)
 
   delete CHECK_NOTNULL(zk);
   delete CHECK_NOTNULL(watcher);
-  watcher = new ProcessWatcher<GroupProcess>(self());
-  zk = new ZooKeeper(servers, sessionTimeout, watcher);
-
-  state = CONNECTING;
+  startConnection();
 }
 
 
