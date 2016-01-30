@@ -52,11 +52,11 @@ public:
   ZooKeeperProcess(
       ZooKeeper* zk,
       const string& servers,
-      const Duration& timeout,
+      const Duration& sessionTimeout,
       Watcher* watcher)
     : ProcessBase(ID::generate("zookeeper")),
       servers(servers),
-      timeout(timeout),
+      sessionTimeout(sessionTimeout),
       zh(NULL)
   {
     // We bind the Watcher::process callback so we can pass it to the
@@ -86,7 +86,7 @@ public:
       zh = zookeeper_init(
           servers.c_str(),
           event,
-          static_cast<int>(timeout.ms()),
+          static_cast<int>(sessionTimeout.ms()),
           NULL,
           &callback,
           0);
@@ -513,7 +513,7 @@ private:
   friend class ZooKeeper;
 
   const string servers; // ZooKeeper host:port pairs.
-  const Duration timeout; // ZooKeeper session timeout;
+  const Duration sessionTimeout; // ZooKeeper session timeout.
 
   zhandle_t* zh; // ZooKeeper connection handle.
 
@@ -525,10 +525,10 @@ private:
 
 ZooKeeper::ZooKeeper(
     const string& servers,
-    const Duration& timeout,
+    const Duration& sessionTimeout,
     Watcher* watcher)
 {
-  process = new ZooKeeperProcess(this, servers, timeout, watcher);
+  process = new ZooKeeperProcess(this, servers, sessionTimeout, watcher);
   spawn(process);
 }
 
