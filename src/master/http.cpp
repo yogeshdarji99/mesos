@@ -55,6 +55,8 @@
 #include <stout/try.hpp>
 #include <stout/utils.hpp>
 
+#include <valgrind/callgrind.h>
+
 #include "common/build.hpp"
 #include "common/http.hpp"
 #include "common/protobuf_utils.hpp"
@@ -1298,6 +1300,9 @@ string Master::Http::STATE_HELP()
 
 Future<Response> Master::Http::state(const Request& request) const
 {
+  CALLGRIND_START_INSTRUMENTATION;
+  CALLGRIND_ZERO_STATS;
+
   auto state = [this](JSON::ObjectWriter* writer) {
     writer->field("version", MESOS_VERSION);
 
@@ -1406,7 +1411,12 @@ Future<Response> Master::Http::state(const Request& request) const
     });
   };
 
-  return OK(jsonify(state), request.url.query.get("jsonp"));
+  auto ok = OK(jsonify(state), request.url.query.get("jsonp"));
+
+  CALLGRIND_DUMP_STATS;
+  CALLGRIND_STOP_INSTRUMENTATION;
+
+  return std::move(ok);
 }
 
 
