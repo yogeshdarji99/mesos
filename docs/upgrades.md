@@ -13,6 +13,8 @@ This document serves as a guide for users who wish to upgrade an existing Mesos 
 
 * Mesos 0.28 changes the definitions of two ACLs used for authorization. The objects of the `ReserveResources` and `CreateVolume` ACLs have been changed to `roles`. In both cases, principals can now be authorized to perform these operations for particular roles. This means that by default, a framework or operator can reserve resources/create volumes for any role. To restrict this behavior, [ACLs can be added](authorization.md) to the master which authorize principals to reserve resources/create volumes for specified roles only. Previously, frameworks could only reserve resources for their own role; this behavior can be preserved by configuring the `ReserveResources` ACLs such that the framework's principal is only authorized to reserve for the framework's role. **NOTE** This renders existing `ReserveResources` and `CreateVolume` ACL definitions obsolete; if you are authorizing these operations, your ACL definitions should be updated.
 
+* When a persistent volume is destroyed, Mesos will now remove any data that was stored on the volume from the filesystem of the appropriate slave. In prior versions of Mesos, destroying a volume would not delete data (this was a known missing feature that has now been implemented).
+
 In order to upgrade a running cluster:
 
 1. Rebuild and install any modules so that upgraded masters/slaves can use them.
