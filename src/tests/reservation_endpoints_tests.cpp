@@ -28,8 +28,6 @@
 #include <process/http.hpp>
 #include <process/pid.hpp>
 
-#include <stout/base64.hpp>
-#include <stout/hashmap.hpp>
 #include <stout/option.hpp>
 
 #include "master/flags.hpp"
