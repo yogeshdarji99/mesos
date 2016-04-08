@@ -102,6 +102,11 @@ extern const Duration DOCKER_INSPECT_DELAY;
 // docker version.
 extern const Duration DOCKER_VERSION_WAIT_TIMEOUT;
 
+// Additional duration that docker containerizer will wait beyond the
+// configured `docker_stop_timeout` for docker stop to succeed, before
+// trying to kill the process by itself.
+constexpr Duration DOCKER_FORCE_KILL_TIMEOUT = Seconds(1);
+
 // Name of the default, CRAM-MD5 authenticatee.
 extern const std::string DEFAULT_AUTHENTICATEE;
 

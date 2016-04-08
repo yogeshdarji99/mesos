@@ -1825,6 +1825,9 @@ void DockerContainerizerProcess::_destroy(
 
   if (killed) {
     docker->stop(container->name(), flags.docker_stop_timeout)
+      .after(
+          flags.docker_stop_timeout + DOCKER_FORCE_KILL_TIMEOUT,
+          defer(self(), &Self::destroyTimeout, containerId, lambda::_1))
       .onAny(defer(self(), &Self::__destroy, containerId, killed, lambda::_1));
   } else {
     __destroy(containerId, killed, Nothing());
@@ -1914,6 +1917,40 @@ void DockerContainerizerProcess::___destroy(
     container->executorName());
 
   delete container;
+}
+
+
+Future<Nothing> DockerContainerizerProcess::destroyTimeout(
+    const ContainerID& containerId,
+    Future<Nothing> future)
+{
+  CHECK(containers_.contains(containerId));
+
+  LOG(WARNING) << "Docker stop timed out for "
+               << "container '" << containerId << "'";
+
+  Container* container = containers_[containerId];
+
+  // A hanging `docker stop` could be a problem with docker or even a kernel
+  // bug. Assuming that this is a docker problem, circumventing docker and
+  // killing the process run by it ourselves might help here.
+  if (container->pid.isSome()) {
+    LOG(WARNING) << "Sending SIGKILL to process with pid "
+                 << container->pid.get();
+
+    Try<list<os::ProcessTree>> kill =
+      os::killtree(container->pid.get(), SIGKILL);
+
+    if (kill.isError()) {
+      // Ignoring the error from killing process as it can already
+      // have exited.
+      VLOG(1) << "Ignoring error when killing process pid "
+              << container->executorPid.get() << " in destroy, error: "
+              << kill.error();
+    }
+  }
+
+  return future;
 }
 
 
