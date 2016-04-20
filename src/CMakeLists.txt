@@ -274,6 +274,7 @@ if (NOT WIN32)
     slave/containerizer/mesos/isolators/filesystem/posix.cpp
     slave/containerizer/mesos/isolators/posix/disk.cpp
     slave/containerizer/mesos/isolators/docker/volume/state.proto
+    slave/containerizer/mesos/isolators/docker/volume/paths.cpp
     slave/containerizer/mesos/provisioner/docker/local_puller.cpp
     slave/containerizer/mesos/provisioner/paths.cpp
     slave/containerizer/mesos/provisioner/provisioner.cpp
