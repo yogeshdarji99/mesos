@@ -67,6 +67,10 @@
 #endif
 
 #ifdef __linux__
+#include "slave/containerizer/mesos/isolators/docker/volume/isolator.hpp"
+#endif
+
+#ifdef __linux__
 #include "slave/containerizer/mesos/isolators/filesystem/linux.hpp"
 #endif
 #include "slave/containerizer/mesos/isolators/filesystem/posix.hpp"
@@ -215,6 +219,7 @@ Try<MesosContainerizer*> MesosContainerizer::create(
     {"cgroups/net_cls", &CgroupsNetClsIsolatorProcess::create},
     {"cgroups/perf_event", &CgroupsPerfEventIsolatorProcess::create},
     {"docker/runtime", &DockerRuntimeIsolatorProcess::create},
+    {"docker/volume", &DockerVolumeIsolatorProcess::create},
     {"namespaces/pid", &NamespacesPidIsolatorProcess::create},
 #endif
 #ifdef WITH_NETWORK_ISOLATOR
