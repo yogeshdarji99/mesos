@@ -32,8 +32,6 @@ using std::vector;
 
 using process::Failure;
 using process::Future;
-using process::NO_SETSID;
-using process::MONITOR;
 using process::Owned;
 using process::Subprocess;
 
@@ -82,14 +80,7 @@ Future<string> DriverClient::mount(
       argv,
       Subprocess::PATH("/dev/null"),
       Subprocess::PIPE(),
-      Subprocess::PIPE(),
-      NO_SETSID,
-      None(),
-      None(),
-      None(),
-      {},
-      None(),
-      MONITOR);
+      Subprocess::PIPE());
 
   if (s.isError()) {
     return Failure("Failed to execute '" + command + "': " + s.error());
@@ -162,14 +153,7 @@ Future<Nothing> DriverClient::unmount(
       argv,
       Subprocess::PATH("/dev/null"),
       Subprocess::PIPE(),
-      Subprocess::PIPE(),
-      NO_SETSID,
-      None(),
-      None(),
-      None(),
-      {},
-      None(),
-      MONITOR);
+      Subprocess::PIPE());
 
   if (s.isError()) {
     return Failure("Failed to execute '" + command + "': " + s.error());
