@@ -1382,18 +1382,27 @@ protected:
       const OfferID& offerId,
       const Filters& filters)
   {
+    declineOffers({offerId}, filters);
+  }
+
+  void declineOffers(
+      const vector<OfferID>& offerIds,
+      const Filters& filters)
+  {
     if (!connected) {
       VLOG(1) << "Ignoring decline offer message as master is disconnected";
       return;
     }
 
-    if (!savedOffers.contains(offerId)) {
-      LOG(WARNING) << "Attempting to decline an unknown offer " << offerId;
-    }
+    foreach (const OfferID& offerId, offerIds) {
+      if (!savedOffers.contains(offerId)) {
+        LOG(WARNING) << "Attempting to decline an unknown offer " << offerId;
+      }
 
-    // Remove the offer. We do not need to save any PIDs
-    // when declining an offer.
-    savedOffers.erase(offerId);
+      // Remove the offer. We do not need to save any PIDs
+      // when declining an offer.
+      savedOffers.erase(offerId);
+    }
 
     Call call;
 
@@ -1402,8 +1411,11 @@ protected:
     call.set_type(Call::DECLINE);
 
     Call::Decline* decline = call.mutable_decline();
-    decline->add_offer_ids()->CopyFrom(offerId);
     decline->mutable_filters()->CopyFrom(filters);
+
+    foreach (const OfferID& offerId, offerIds) {
+      decline->add_offer_ids()->CopyFrom(offerId);
+    }
 
     CHECK_SOME(master);
     send(master.get().pid(), call);
@@ -2156,6 +2168,28 @@ Status MesosSchedulerDriver::declineOffer(
         process,
         &SchedulerProcess::declineOffer,
         offerId,
+        filters);
+
+    return status;
+  }
+}
+
+
+Status MesosSchedulerDriver::declineOffers(
+    const vector<OfferID>& offerIds,
+    const Filters& filters)
+{
+  synchronized (mutex) {
+    if (status != DRIVER_RUNNING) {
+      return status;
+    }
+
+    CHECK(process != nullptr);
+
+    dispatch(
+        process,
+        &SchedulerProcess::declineOffers,
+        offerIds,
         filters);
 
     return status;

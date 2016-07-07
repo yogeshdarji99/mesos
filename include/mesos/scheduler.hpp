@@ -281,6 +281,15 @@ public:
       const OfferID& offerId,
       const Filters& filters = Filters()) = 0;
 
+  // Declines all specified offers in its entirety and applies the
+  // specified filters on the resources (see mesos.proto for a
+  // description of Filters). Note that this can be done at any time,
+  // it is not necessary to do this within the Scheduler::resourceOffers
+  // callback.
+  virtual Status declineOffers(
+      const std::vector<OfferID>& offerIds,
+      const Filters& filters = Filters()) = 0;
+
   // Removes all filters previously set by the framework (via
   // launchTasks()). This enables the framework to receive offers from
   // those filtered slaves.
@@ -434,6 +443,10 @@ public:
 
   virtual Status declineOffer(
       const OfferID& offerId,
+      const Filters& filters = Filters());
+
+  virtual Status declineOffers(
+      const std::vector<OfferID>& offerIds,
       const Filters& filters = Filters());
 
   virtual Status reviveOffers();
