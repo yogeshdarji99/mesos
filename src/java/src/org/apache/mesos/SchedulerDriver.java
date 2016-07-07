@@ -254,6 +254,36 @@ public interface SchedulerDriver {
   Status declineOffer(OfferID offerId);
 
   /**
+   * Declines all specified offers in its entirety and applies the specified
+   * filters on the resources (see mesos.proto for a description of
+   * Filters). Note that this can be done at any time, it is not
+   * necessary to do this within the {@link Scheduler#resourceOffers}
+   * callback.
+   *
+   * @param offerIds The IDs of the offers to be declined.
+   * @param filters  The filters to set for any remaining resources.
+   *
+   * @return         The state of the driver after the call.
+   *
+   * @see OfferID
+   * @see Filters
+   * @see Status
+   */
+  Status declineOffers(Collection<OfferID> offerIds, Filters filters);
+
+  /**
+   * Declines all offers in its entirety. See above for details.
+   *
+   * @param offerIds The IDs of the offers to be declined.
+   *
+   * @return         The state of the driver after the call.
+   *
+   * @see OfferID
+   * @see Status
+   */
+  Status declineOffers(Collection<OfferID> offerIds);
+
+  /**
    * Removes all filters, previously set by the framework (via {@link
    * #launchTasks}). This enables the framework to receive offers
    * from those filtered slaves.

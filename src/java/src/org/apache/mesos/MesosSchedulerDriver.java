@@ -286,6 +286,13 @@ public class MesosSchedulerDriver implements SchedulerDriver {
 
   public native Status declineOffer(OfferID offerId, Filters filters);
 
+  public Status declineOffers(Collection<OfferID> offerIds) {
+    return declineOffers(offerIds, Filters.newBuilder().build());
+  }
+
+  public native Status declineOffers(Collection<OfferID> offerIds,
+                                     Filters filters);
+
   public native Status reviveOffers();
 
   public native Status suppressOffers();

@@ -966,6 +966,49 @@ JNIEXPORT jobject JNICALL Java_org_apache_mesos_MesosSchedulerDriver_declineOffe
 
 /*
  * Class:     org_apache_mesos_MesosSchedulerDriver
+ * Method:    declineOffers
+ * Signature: (Ljava/util/Collection;Lorg/apache/mesos/Protos/Filters;)Lorg/apache/mesos/Protos/Status;
+ */
+JNIEXPORT jobject JNICALL Java_org_apache_mesos_MesosSchedulerDriver_declineOffers
+  (JNIEnv* env, jobject thiz, jobject jofferIds, jobject jfilters)
+{
+  vector<OfferID> offerIds;
+  jclass clazz = env->GetObjectClass(jofferIds);
+
+  jmethodID iterator =
+    env->GetMethodID(clazz, "iterator", "()Ljava/util/Iterator;");
+  jobject jiterator = env->CallObjectMethod(jofferIds, iterator);
+
+  clazz = env->GetObjectClass(jiterator);
+
+  jmethodID hasNext = env->GetMethodID(clazz, "hasNext", "()Z");
+
+  jmethodID next = env->GetMethodID(clazz, "next", "()Ljava/lang/Object;");
+
+  while (env->CallBooleanMethod(jiterator, hasNext)) {
+    jobject jofferId = env->CallObjectMethod(jiterator, next);
+    const OfferID& offerId = construct<OfferID>(env, jofferId);
+    offerIds.push_back(offerId);
+  }
+
+  // Construct a C++ Filters from the Java Filters.
+  const Filters& filters = construct<Filters>(env, jfilters);
+
+  // Now invoke the underlying driver.
+  clazz = env->GetObjectClass(thiz);
+
+  jfieldID __driver = env->GetFieldID(clazz, "__driver", "J");
+  MesosSchedulerDriver* driver =
+    (MesosSchedulerDriver*) env->GetLongField(thiz, __driver);
+
+  Status status = driver->declineOffers(offerIds, filters);
+
+  return convert<Status>(env, status);
+}
+
+
+/*
+ * Class:     org_apache_mesos_MesosSchedulerDriver
  * Method:    reviveOffers
  * Signature: ()Lorg/apache/mesos/Protos/Status;
  */
