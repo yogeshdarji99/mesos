@@ -136,6 +136,11 @@ PyMethodDef MesosSchedulerDriverImpl_methods[] = {
     METH_VARARGS,
     "Decline a Mesos offer"
   },
+  { "declineOffers",
+    (PyCFunction) MesosSchedulerDriverImpl_declineOffers,
+    METH_VARARGS,
+    "Decline all spcified Mesos offers"
+  },
   { "reviveOffers",
     (PyCFunction) MesosSchedulerDriverImpl_reviveOffers,
     METH_NOARGS,
@@ -641,6 +646,49 @@ PyObject* MesosSchedulerDriverImpl_declineOffer(MesosSchedulerDriverImpl* self,
   }
 
   Status status = self->driver->declineOffer(offerId, filters);
+  return PyInt_FromLong(status); // Sets exception if creating long fails.
+}
+
+
+PyObject* MesosSchedulerDriverImpl_declineOffers(MesosSchedulerDriverImpl* self,
+                                                 PyObject* args)
+{
+  if (self->driver == nullptr) {
+    PyErr_Format(PyExc_Exception, "MesosSchedulerDriverImpl.driver is nullptr");
+    return nullptr;
+  }
+
+  PyObject* offerIdsObj = nullptr;
+  PyObject* filtersObj = nullptr;
+  vector<OfferID> offerIds;
+  Filters filters;
+
+  if (!PyArg_ParseTuple(args, "O|O", &offerIdsObj, &filtersObj)) {
+    return nullptr;
+  }
+
+  Py_ssize_t len = PyList_Size(offerIdsObj);
+  for (int i = 0; i < len; i++) {
+    PyObject* offerIdObj = PyList_GetItem(offerIdsObj, i);
+    if (offerIdObj == nullptr) {
+      return nullptr;
+    }
+    OfferID offerId;
+    if (!readPythonProtobuf(offerIdObj, &offerId)) {
+      PyErr_Format(PyExc_Exception, "Could not deserialize Python OfferID");
+      return nullptr;
+    }
+    offerIds.push_back(offerId);
+  }
+
+  if (filtersObj != nullptr) {
+    if (!readPythonProtobuf(filtersObj, &filters)) {
+      PyErr_Format(PyExc_Exception, "Could not deserialize Python Filters");
+      return nullptr;
+    }
+  }
+
+  Status status = self->driver->declineOffers(offerIds, filters);
   return PyInt_FromLong(status); // Sets exception if creating long fails.
 }
 

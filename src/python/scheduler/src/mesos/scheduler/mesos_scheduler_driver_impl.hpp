@@ -111,6 +111,10 @@ PyObject* MesosSchedulerDriverImpl_declineOffer(
     MesosSchedulerDriverImpl* self,
     PyObject* args);
 
+PyObject* MesosSchedulerDriverImpl_declineOffers(
+    MesosSchedulerDriverImpl* self,
+    PyObject* args);
+
 PyObject* MesosSchedulerDriverImpl_reviveOffers(MesosSchedulerDriverImpl* self);
 
 PyObject* MesosSchedulerDriverImpl_suppressOffers(

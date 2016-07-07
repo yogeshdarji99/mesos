@@ -238,6 +238,15 @@ class SchedulerDriver(object):
       callback.
     """
 
+  def declineOffers(self, offerIds, filters=None):
+    """
+      Declines all specified offers in its entirety and applies the
+      specified filters on the resources (see mesos.proto for a
+      description of Filters). Note that this can be done at any time,
+      it is not necessary to do this within the
+      Scheduler::resourceOffers callback.
+    """
+
   def reviveOffers(self):
     """
       Removes all filters previously set by the framework (via
