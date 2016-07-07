@@ -187,9 +187,13 @@ public:
     // offers.
     filters.set_refuse_seconds(Duration::max().secs());
 
-    for (size_t i = 0; i < offers.size(); i++) {
-      driver->declineOffer(offers[i].id(), filters);
+    vector<OfferID> offerIds;
+    offerIds.reserve(offers.size());
+    foreach (const Offer& offer, offers) {
+      offerIds.push_back(offer.id());
     }
+
+    driver->declineOffers(offerIds, filters);
   }
 
   virtual void offerRescinded(SchedulerDriver*, const OfferID&) {}

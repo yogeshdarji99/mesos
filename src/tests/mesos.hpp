@@ -860,9 +860,13 @@ ACTION(DeclineOffers)
   SchedulerDriver* driver = arg0;
   std::vector<Offer> offers = arg1;
 
-  for (size_t i = 0; i < offers.size(); i++) {
-    driver->declineOffer(offers[i].id());
+  vector<OfferID> offerIds;
+  offerIds.reserve(offers.size());
+  foreach (const Offer& offer, offers) {
+    offerIds.push_back(offer.id());
   }
+
+  driver->declineOffers(offerIds);
 }
 
 
@@ -872,9 +876,13 @@ ACTION_P(DeclineOffers, filters)
   SchedulerDriver* driver = arg0;
   std::vector<Offer> offers = arg1;
 
-  for (size_t i = 0; i < offers.size(); i++) {
-    driver->declineOffer(offers[i].id(), filters);
+  vector<OfferID> offerIds;
+  offerIds.reserve(offers.size());
+  foreach (const Offer& offer, offers) {
+    offerIds.push_back(offer.id());
   }
+
+  driver->declineOffers(offerIds, filters);
 }
 
 
