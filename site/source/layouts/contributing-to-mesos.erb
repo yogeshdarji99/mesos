@@ -1,0 +1,7 @@
+<% content_for :javascript do %>
+  <%= javascript_include_tag '//www.gstatic.com/charts/loader.js' %>
+  <%= javascript_include_tag 'contributing-to-mesos.js' %>
+<% end %>
+<% wrap_layout :post do %>
+  <%= yield %>
+<% end %>
